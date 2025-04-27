@@ -39,8 +39,8 @@ void main() {
 			acceleration += 0.81 * massObjectsIn[i].mass / distanceSquared * normalize(offset);
 		}
 	}
-	vec2 velocity = massObjectsIn[index].velocity + acceleration * push.deltaTime / 2.0;
-	vec2 position = massObjectsIn[index].position + velocity * push.deltaTime / 2.0;
+	vec2 velocity = massObjectsIn[index].velocity + acceleration * push.deltaTime;
+	vec2 position = massObjectsIn[index].position + velocity * push.deltaTime;
 	massObjectsOut[index].velocity = velocity;
 	massObjectsOut[index].position = position;
 }
