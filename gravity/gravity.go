@@ -234,30 +234,12 @@ func New(device *device.Device) *Gravity {
 	}
 }
 
-func (g *Gravity) UploadMassObjects(
+func copyWithStagingBuffer[T any](
 	device *device.Device,
-	objects []*object.GameObject,
+	initialBuffer []T,
+	copyFn func(commandBuffer vulkan.CommandBuffer, staging vulkan.Buffer),
 ) {
-	var massObjects []ObjectWithMass
-	for _, object := range objects {
-		if object.Mass != nil {
-			massObjects = append(massObjects, ObjectWithMass{
-				position: object.GetPosition(),
-				velocity: object.Mass.Velocity,
-				mass:     object.Mass.Mass,
-			})
-		}
-	}
-	g.massElementsCount = len(massObjects)
-	bufferSize := int(unsafe.Sizeof(ObjectWithMass{})) * g.massElementsCount
-
-	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		g.buffers[i].massBuffer, g.buffers[i].massMemory = device.CreateBuffer(
-			vulkan.DeviceSize(g.massElementsCount*int(unsafe.Sizeof(ObjectWithMass{}))),
-			vulkan.BufferUsageFlags(vulkan.BufferUsageVertexBufferBit|vulkan.BufferUsageStorageBufferBit|vulkan.BufferUsageTransferDstBit),
-			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
-		)
-	}
+	bufferSize := len(initialBuffer) * int(unsafe.Sizeof(initialBuffer[0]))
 
 	buffer, memory := device.CreateBuffer(
 		vulkan.DeviceSize(bufferSize),
@@ -269,8 +251,8 @@ func (g *Gravity) UploadMassObjects(
 	if err := vulkan.Error(vulkan.MapMemory(device.LogicalDevice, memory, 0, vulkan.DeviceSize(bufferSize), 0, &data)); err != nil {
 		panic("failed to map buffer memory: " + err.Error())
 	}
-	slice := unsafe.Slice((*ObjectWithMass)(data), g.massElementsCount)
-	copy(slice, massObjects)
+	slice := unsafe.Slice((*T)(data), len(initialBuffer))
+	copy(slice, initialBuffer)
 	vulkan.UnmapMemory(device.LogicalDevice, memory)
 
 	commandBuffer := make([]vulkan.CommandBuffer, 1)
@@ -290,15 +272,7 @@ func (g *Gravity) UploadMassObjects(
 		panic("failed to begin recording command buffer: " + err.Error())
 	}
 
-	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		vulkan.CmdCopyBuffer(commandBuffer[0], buffer, g.buffers[i].massBuffer, 1, []vulkan.BufferCopy{
-			{
-				SrcOffset: 0,
-				DstOffset: 0,
-				Size:      vulkan.DeviceSize(bufferSize),
-			},
-		})
-	}
+	copyFn(commandBuffer[0], buffer)
 
 	if err := vulkan.Error(vulkan.EndCommandBuffer(commandBuffer[0])); err != nil {
 		panic("failed to end command buffer: " + err.Error())
@@ -315,6 +289,44 @@ func (g *Gravity) UploadMassObjects(
 	vulkan.FreeCommandBuffers(device.LogicalDevice, device.ComputePool, 1, commandBuffer)
 	vulkan.DestroyBuffer(device.LogicalDevice, buffer, nil)
 	vulkan.FreeMemory(device.LogicalDevice, memory, nil)
+}
+
+func (g *Gravity) UploadMassObjects(
+	device *device.Device,
+	objects []*object.GameObject,
+) {
+	var massObjects []ObjectWithMass
+	for _, object := range objects {
+		if object.Mass != nil {
+			massObjects = append(massObjects, ObjectWithMass{
+				position: object.GetPosition(),
+				velocity: object.Mass.Velocity,
+				mass:     object.Mass.Mass,
+			})
+		}
+	}
+	g.massElementsCount = len(massObjects)
+	bufferSize := int(unsafe.Sizeof(ObjectWithMass{})) * g.massElementsCount
+
+	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
+		g.buffers[i].massBuffer, g.buffers[i].massMemory = device.CreateBuffer(
+			vulkan.DeviceSize(bufferSize),
+			vulkan.BufferUsageFlags(vulkan.BufferUsageVertexBufferBit|vulkan.BufferUsageStorageBufferBit|vulkan.BufferUsageTransferDstBit),
+			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
+		)
+	}
+
+	copyWithStagingBuffer(device, massObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
+		for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
+			vulkan.CmdCopyBuffer(cb, staging, g.buffers[i].massBuffer, 1, []vulkan.BufferCopy{
+				{
+					SrcOffset: 0,
+					DstOffset: 0,
+					Size:      vulkan.DeviceSize(bufferSize),
+				},
+			})
+		}
+	})
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
 		vulkan.UpdateDescriptorSets(device.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
@@ -329,7 +341,7 @@ func (g *Gravity) UploadMassObjects(
 					{
 						Buffer: g.buffers[(i+swapchain.MAX_FRAMES_IN_FLIGHT-1)%swapchain.MAX_FRAMES_IN_FLIGHT].massBuffer,
 						Offset: 0,
-						Range:  vulkan.DeviceSize(g.massElementsCount * int(unsafe.Sizeof(ObjectWithMass{}))),
+						Range:  vulkan.DeviceSize(bufferSize),
 					},
 				},
 			},
@@ -344,7 +356,7 @@ func (g *Gravity) UploadMassObjects(
 					{
 						Buffer: g.buffers[i].massBuffer,
 						Offset: 0,
-						Range:  vulkan.DeviceSize(g.massElementsCount * int(unsafe.Sizeof(ObjectWithMass{}))),
+						Range:  vulkan.DeviceSize(bufferSize),
 					},
 				},
 			},
@@ -377,17 +389,19 @@ func (g *Gravity) UploadFieldObjects(
 
 	g.vecBuffer, g.vecMemory = device.CreateBuffer(
 		vulkan.DeviceSize(g.fieldElementsCount*int(unsafe.Sizeof(VectorField{}))),
-		vulkan.BufferUsageFlags(vulkan.BufferUsageStorageBufferBit),
-		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyHostVisibleBit|vulkan.MemoryPropertyHostCoherentBit),
+		vulkan.BufferUsageFlags(vulkan.BufferUsageStorageBufferBit|vulkan.BufferUsageTransferDstBit),
+		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
 	)
 
-	var data unsafe.Pointer
-	if err := vulkan.Error(vulkan.MapMemory(device.LogicalDevice, g.vecMemory, 0, vulkan.DeviceSize(bufferSize), 0, &data)); err != nil {
-		panic("failed to map buffer memory: " + err.Error())
-	}
-	slice := unsafe.Slice((*VectorField)(data), g.fieldElementsCount)
-	copy(slice, fieldObjects)
-	vulkan.UnmapMemory(device.LogicalDevice, g.vecMemory)
+	copyWithStagingBuffer(device, fieldObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
+		vulkan.CmdCopyBuffer(cb, staging, g.vecBuffer, 1, []vulkan.BufferCopy{
+			{
+				SrcOffset: 0,
+				DstOffset: 0,
+				Size:      vulkan.DeviceSize(bufferSize),
+			},
+		})
+	})
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
 		vulkan.UpdateDescriptorSets(device.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
