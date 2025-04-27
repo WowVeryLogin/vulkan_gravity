@@ -1,0 +1,46 @@
+#version 450
+
+struct MassObject {
+	vec2 position;
+	vec2 velocity;
+	float mass;
+};
+
+layout(std140, binding = 0) readonly buffer InMass{
+	MassObject massObjectsIn[];
+};
+
+layout(std140, binding = 1) writeonly buffer OutMass{
+	MassObject massObjectsOut[];
+};
+
+layout(push_constant) uniform Push {
+   float deltaTime;
+   uint numMassObjects;
+} push;
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+	uint index = gl_GlobalInvocationID.x;
+	if (index >= push.numMassObjects) {
+		return;
+	}
+
+	vec2 acceleration = vec2(0.0);
+	for (uint i = 0; i < push.numMassObjects; i++) {
+		if (i != index) {
+			vec2 offset = massObjectsIn[i].position - massObjectsIn[index].position;
+			float distanceSquared = dot(offset, offset);
+			if (abs(distanceSquared) < 0.01) {
+				continue; // Avoid division by zero
+			}
+
+			acceleration += 0.81 * massObjectsIn[i].mass / distanceSquared * normalize(offset);
+		}
+	}
+	vec2 velocity = massObjectsIn[index].velocity + acceleration * push.deltaTime / 2.0;
+	vec2 position = massObjectsIn[index].position + velocity * push.deltaTime / 2.0;
+	massObjectsOut[index].velocity = velocity;
+	massObjectsOut[index].position = position;
+}

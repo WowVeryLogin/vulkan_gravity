@@ -1,0 +1,54 @@
+#version 450
+
+struct MassObject {
+	vec2 position;
+	vec2 velocity;
+	float mass;
+};
+
+struct Force {
+	vec2 force;
+};
+
+struct Pos {
+	vec2 position;
+};
+
+layout(std140, binding = 1) readonly buffer InMass{
+	MassObject massObjectsIn[];
+};
+
+layout(std140, binding = 2) readonly buffer InPos{
+	Pos pos[];
+};
+
+layout(std140, binding = 3) buffer OutForce{
+	Force forceOut[];
+};
+
+layout(push_constant) uniform Push {
+   uint totalFieldPoints;
+   uint numMassObjects;
+} push;
+
+layout (local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+	uint index = gl_GlobalInvocationID.x;
+	if (index >= push.totalFieldPoints) {
+		return;
+	}
+
+	vec2 totalForce = vec2(0.0, 0.0);
+	for (uint i = 0; i < push.numMassObjects; i++) {
+		vec2 offset = massObjectsIn[i].position - pos[index].position;
+		float distanceSquared = dot(offset, offset);
+
+		if (abs(distanceSquared) < 0.0000001) {
+			continue; // Avoid division by zero
+		}
+
+		totalForce += 0.81 * massObjectsIn[i].mass / distanceSquared * normalize(offset);
+	}
+	forceOut[index].force = totalForce;
+}
