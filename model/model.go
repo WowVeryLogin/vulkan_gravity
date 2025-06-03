@@ -17,6 +17,7 @@ type Model struct {
 type Position struct {
 	X float32
 	Y float32
+	Z float32
 }
 
 type Vertex struct {
@@ -36,7 +37,7 @@ var VertexAttributeDescription = []vulkan.VertexInputAttributeDescription{
 	{
 		Binding:  0,
 		Location: 0,
-		Format:   vulkan.FormatR32g32Sfloat,
+		Format:   vulkan.FormatR32g32b32Sfloat,
 		Offset:   uint32(unsafe.Offsetof(Vertex{}.Pos)),
 	},
 	{

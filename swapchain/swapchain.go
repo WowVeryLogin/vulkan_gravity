@@ -14,10 +14,9 @@ type SwapchainFactory struct {
 
 	syncObjects []syncObject
 
-	surfaceFormat  vulkan.SurfaceFormat
-	presentMode    vulkan.PresentMode
-	depthFormat    vulkan.Format
-	swapchainProps device.SwapchainProperties
+	surfaceFormat vulkan.SurfaceFormat
+	presentMode   vulkan.PresentMode
+	depthFormat   vulkan.Format
 }
 
 func New(device *device.Device, windowExtent vulkan.Extent2D) *SwapchainFactory {
@@ -31,12 +30,11 @@ func New(device *device.Device, windowExtent vulkan.Extent2D) *SwapchainFactory 
 	syncObjects := createSyncObjects(device)
 
 	sf := SwapchainFactory{
-		RenderPass:     renderPass,
-		surfaceFormat:  surfaceFormat,
-		presentMode:    presentMode,
-		depthFormat:    depthFormat,
-		syncObjects:    syncObjects,
-		swapchainProps: sp,
+		RenderPass:    renderPass,
+		surfaceFormat: surfaceFormat,
+		presentMode:   presentMode,
+		depthFormat:   depthFormat,
+		syncObjects:   syncObjects,
 	}
 
 	sf.Swapchain = sf.newSwapchain(device, windowExtent, sf.syncObjects)
@@ -115,15 +113,11 @@ func (swapchain *Swapchain) createSwapchain(
 	surfaceFormat vulkan.SurfaceFormat,
 	extent vulkan.Extent2D,
 	presentMode vulkan.PresentMode,
+	oldSwapchain vulkan.Swapchain,
 ) []vulkan.Image {
 	imageCount := sp.Caps.MinImageCount + 1
 	if sp.Caps.MaxImageCount > 0 && imageCount > sp.Caps.MaxImageCount {
 		imageCount = sp.Caps.MaxImageCount
-	}
-
-	var oldSwapchain vulkan.Swapchain
-	if swapchain != nil {
-		oldSwapchain = swapchain.swapchain
 	}
 
 	var newSwapchain vulkan.Swapchain
@@ -376,14 +370,20 @@ func (sf *SwapchainFactory) newSwapchain(
 	windowExtent vulkan.Extent2D,
 	syncObjects []syncObject,
 ) *Swapchain {
-	extent := chooseSwapExtent(windowExtent, sf.swapchainProps.Caps)
+	swapchainProps := device.SwapchainSupport()
+	extent := chooseSwapExtent(windowExtent, swapchainProps.Caps)
 	swapchain := &Swapchain{
 		device:      device,
 		Extent:      extent,
 		syncObjects: syncObjects,
 	}
 
-	images := swapchain.createSwapchain(device, sf.swapchainProps, sf.surfaceFormat, extent, sf.presentMode)
+	var oldSwapchain vulkan.Swapchain
+	if sf.Swapchain != nil {
+		oldSwapchain = sf.Swapchain.swapchain
+	}
+
+	images := swapchain.createSwapchain(device, swapchainProps, sf.surfaceFormat, extent, sf.presentMode, oldSwapchain)
 	views := createImageViews(device, images, sf.surfaceFormat.Format)
 	depthResources := createDepthResources(device, sf.depthFormat, extent, images)
 	frameBuffers := createFrameBuffers(device, images, views, depthResources, extent, sf.RenderPass)
@@ -420,8 +420,8 @@ func (s *Swapchain) SubmitCommandBuffer(
 	buffers vulkan.CommandBuffer,
 	currentFrame uint32,
 	imageIndex uint32,
-	computeSemaphore vulkan.Semaphore,
-) {
+	// computeSemaphore vulkan.Semaphore,
+) error {
 	if s.imagesInFlight[imageIndex] != vulkan.Fence(vulkan.NullHandle) {
 		vulkan.WaitForFences(s.device.LogicalDevice, 1, []vulkan.Fence{
 			s.imagesInFlight[imageIndex],
@@ -436,10 +436,10 @@ func (s *Swapchain) SubmitCommandBuffer(
 	if err := vulkan.Error(vulkan.QueueSubmit(s.device.Queue, 1, []vulkan.SubmitInfo{
 		{
 			SType:              vulkan.StructureTypeSubmitInfo,
-			WaitSemaphoreCount: 2,
+			WaitSemaphoreCount: 1,
 			PWaitSemaphores: []vulkan.Semaphore{
 				s.syncObjects[currentFrame].imageAvailable,
-				computeSemaphore,
+				// computeSemaphore,
 			},
 			PWaitDstStageMask: []vulkan.PipelineStageFlags{
 				vulkan.PipelineStageFlags(vulkan.PipelineStageColorAttachmentOutputBit),
@@ -470,13 +470,14 @@ func (s *Swapchain) SubmitCommandBuffer(
 	})
 
 	if result == vulkan.ErrorOutOfDate || result == vulkan.Suboptimal {
-		return
+		return ErrOutOfDate
 	}
 
 	if err := vulkan.Error(result); err != nil {
 		panic("failed to submit command buffer to queue: " + err.Error())
 	}
 
+	return nil
 	// s.currentFrame = (s.currentFrame + 1) % MAX_FRAMES_IN_FLIGHT
 }
 

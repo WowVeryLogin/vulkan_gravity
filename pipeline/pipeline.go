@@ -17,17 +17,15 @@ type Pipeline struct {
 }
 
 type PushData struct {
-	Transformation [4]float32
-	Offset         [2]float32
-	IsField        uint32
-	Index          uint32
+	Camera         [16]float32
+	Transformation [16]float32
 	Color          [3]float32
+	_              float32
 }
 
 func New(
 	device *device.Device,
 	renderPass vulkan.RenderPass,
-	descriptorsLayout vulkan.DescriptorSetLayout,
 ) *Pipeline {
 	vertModule := shader.CreateShaderModule("shaders/vert.spv", device.LogicalDevice)
 	fragModule := shader.CreateShaderModule("shaders/frag.spv", device.LogicalDevice)
@@ -43,10 +41,10 @@ func New(
 				Size:       uint32(unsafe.Sizeof(PushData{})),
 			},
 		},
-		SetLayoutCount: 1,
-		PSetLayouts: []vulkan.DescriptorSetLayout{
-			descriptorsLayout,
-		},
+		// SetLayoutCount: 1,
+		// PSetLayouts: []vulkan.DescriptorSetLayout{
+		// 	descriptorsLayout,
+		// },
 	}, nil, &layout)); err != nil {
 		panic("failed to create pipeline layout: " + err.Error())
 	}
@@ -78,8 +76,9 @@ func New(
 				PVertexAttributeDescriptions:    model.VertexAttributeDescription,
 			},
 			PInputAssemblyState: &vulkan.PipelineInputAssemblyStateCreateInfo{
-				SType:    vulkan.StructureTypePipelineInputAssemblyStateCreateInfo,
-				Topology: vulkan.PrimitiveTopologyTriangleList,
+				SType:                  vulkan.StructureTypePipelineInputAssemblyStateCreateInfo,
+				Topology:               vulkan.PrimitiveTopologyTriangleList,
+				PrimitiveRestartEnable: vulkan.False,
 			},
 			PViewportState: &vulkan.PipelineViewportStateCreateInfo{
 				SType:         vulkan.StructureTypePipelineViewportStateCreateInfo,
@@ -148,9 +147,8 @@ func New(
 	}
 }
 
-func (p *Pipeline) Bind(commandBuffer vulkan.CommandBuffer, descriptors vulkan.DescriptorSet) {
+func (p *Pipeline) Bind(commandBuffer vulkan.CommandBuffer) {
 	vulkan.CmdBindPipeline(commandBuffer, vulkan.PipelineBindPointGraphics, p.pipeline)
-	vulkan.CmdBindDescriptorSets(commandBuffer, vulkan.PipelineBindPointGraphics, p.Layout, 0, 1, []vulkan.DescriptorSet{descriptors}, 0, nil)
 }
 
 func (p *Pipeline) Close() {

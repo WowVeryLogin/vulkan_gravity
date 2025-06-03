@@ -1,6 +1,7 @@
 package drawer
 
 import (
+	"game/camera"
 	"game/device"
 	"game/object"
 	"game/pipeline"
@@ -18,32 +19,36 @@ type Drawer struct {
 func New(
 	device *device.Device,
 	renderPass vulkan.RenderPass,
-	descriptorsLayout vulkan.DescriptorSetLayout,
 ) *Drawer {
 	return &Drawer{
-		pipeline:         pipeline.New(device, renderPass, descriptorsLayout),
+		pipeline:         pipeline.New(device, renderPass),
 		lastRenderedTime: time.Now(),
 	}
 }
 
 func (d *Drawer) RenderGameObects(
 	commandBuffer vulkan.CommandBuffer,
-	descriptors vulkan.DescriptorSet,
 	gameObjects []*object.GameObject,
+	camera *camera.Camera,
 ) {
-	d.pipeline.Bind(commandBuffer, descriptors)
+	d.pipeline.Bind(commandBuffer)
 
 	since := time.Since(d.lastRenderedTime)
 	d.lastRenderedTime = time.Now()
 
+	cameraMatrix := camera.ToMatrix()
+
 	for _, obj := range gameObjects {
+		data := obj.ToPushData(since)
+		data.Camera = cameraMatrix
+
 		vulkan.CmdPushConstants(
 			commandBuffer,
 			d.pipeline.Layout,
 			vulkan.ShaderStageFlags(vulkan.ShaderStageVertexBit|vulkan.ShaderStageFragmentBit),
 			0,
 			uint32(unsafe.Sizeof(pipeline.PushData{})),
-			unsafe.Pointer(obj.ToPushData(since)),
+			unsafe.Pointer(data),
 		)
 
 		obj.Model.Bind(commandBuffer)

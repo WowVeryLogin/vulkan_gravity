@@ -1,14 +1,17 @@
 package app
 
 import (
+	"game/camcontroller"
+	"game/camera"
 	"game/device"
 	"game/drawer"
-	"game/gravity"
 	"game/model"
 	"game/object"
 	"game/renderer"
+	"game/swapchain"
 	"game/window"
 	"math"
+	"time"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/goki/vulkan"
@@ -21,10 +24,12 @@ type App struct {
 	models []*model.Model
 
 	gameObjectsDrawer *drawer.Drawer
-	gravity           *gravity.Gravity
 
 	renderer    *renderer.Renderer
 	gameObjects []*object.GameObject
+	camera      *camera.Camera
+
+	cameraController *camcontroller.Controller
 }
 
 func New() *App {
@@ -39,19 +44,17 @@ func New() *App {
 
 	models, objects := loadGameObjects(device)
 
-	gravity := gravity.New(device)
-	gravity.UploadMassObjects(device, objects)
-	gravity.UploadFieldObjects(device, objects)
-
 	renderer := renderer.New(device, window.Extent)
-	drawer := drawer.New(device, renderer.RenderPass, gravity.DescriptorsLayout)
+	drawer := drawer.New(device, renderer.RenderPass)
+	camera := camera.New(50.0, renderer.GetAspectRatio(), 0.1, 10.0)
 
 	return &App{
-		window:            &window,
+		window:            window,
 		device:            device,
 		gameObjectsDrawer: drawer,
-		gravity:           gravity,
 		renderer:          renderer,
+		camera:            camera,
+		cameraController:  camcontroller.New(),
 		models:            models,
 		gameObjects:       objects,
 	}
@@ -61,22 +64,24 @@ func (a *App) Run() {
 	for !a.window.ShouldClose() {
 		glfw.PollEvents()
 
-		if commandBuffer, frameIdx, err := a.renderer.BeginFrame(); err == nil {
-			a.gravity.ComputeGravity(commandBuffer.ComputeCommandBuffer, frameIdx)
-			computeFence, descriptors := a.gravity.ComputeGravityField(commandBuffer.ComputeCommandBuffer, frameIdx)
-			a.renderer.BeginSwapChainRenderPass()
-			a.gameObjectsDrawer.RenderGameObects(commandBuffer.GraphicsCommandBuffer, descriptors, a.gameObjects)
-			a.renderer.EndSwapChainRenderPass()
-			a.renderer.EndFrame(computeFence)
+		a.cameraController.Update(a.window, a.camera)
 
-			if a.window.SizeChanged {
-				for a.window.Extent.Height == 0 || a.window.Extent.Width == 0 {
-					glfw.WaitEvents()
-				}
-				vulkan.DeviceWaitIdle(a.device.LogicalDevice)
-				a.window.SizeChanged = false
-				a.renderer.UpdateSwapchain(a.window.Extent)
+		commandBuffer, _, err := a.renderer.BeginFrame()
+		if err == nil {
+			a.renderer.BeginSwapChainRenderPass()
+			a.gameObjectsDrawer.RenderGameObects(commandBuffer.GraphicsCommandBuffer, a.gameObjects, a.camera)
+			a.renderer.EndSwapChainRenderPass()
+			err = a.renderer.EndFrame()
+		}
+
+		if err == swapchain.ErrOutOfDate || a.window.SizeChanged {
+			for a.window.Extent.Height == 0 || a.window.Extent.Width == 0 {
+				glfw.WaitEvents()
 			}
+			vulkan.DeviceWaitIdle(a.device.LogicalDevice)
+			a.window.SizeChanged = false
+			a.renderer.UpdateSwapchain(a.window.Extent)
+			a.camera.Update(a.renderer.GetAspectRatio())
 		}
 	}
 
@@ -89,7 +94,6 @@ func (a *App) Close() {
 	for _, model := range a.models {
 		model.Close()
 	}
-	a.gravity.Close()
 	a.gameObjectsDrawer.Close()
 	a.renderer.Close()
 	a.device.Close()
@@ -123,121 +127,64 @@ func createCircleVertices(numSides int) []model.Vertex {
 }
 
 func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObject) {
-	// triangle := model.New(device, []model.Vertex{
-	// 	{Pos: model.Position{X: 0.0, Y: -0.5}, RGB: [3]float32{1, 0, 0}},
-	// 	{Pos: model.Position{X: 0.5, Y: 0.5}, RGB: [3]float32{0, 1, 0}},
-	// 	{Pos: model.Position{X: -0.5, Y: 0.5}, RGB: [3]float32{0, 0, 1}},
-	// })
+	cube := model.New(device, []model.Vertex{
+		//left
+		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+		{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
 
-	rectangle := model.New(device, []model.Vertex{
-		{Pos: model.Position{X: -0.5, Y: -0.5}, RGB: [3]float32{1, 0, 0}},
-		{Pos: model.Position{X: 0.5, Y: 0.5}, RGB: [3]float32{0, 1, 0}},
-		{Pos: model.Position{X: -0.5, Y: 0.5}, RGB: [3]float32{0, 1, 0}},
-		{Pos: model.Position{X: -0.5, Y: -0.5}, RGB: [3]float32{0, 1, 0}},
-		{Pos: model.Position{X: 0.5, Y: -0.5}, RGB: [3]float32{0, 0, 1}},
-		{Pos: model.Position{X: 0.5, Y: 0.5}, RGB: [3]float32{1, 1, 0}},
+		//right
+		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
+		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.8, .8, .1}},
+		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .8, .1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
+
+		// top
+		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+		{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+
+		// bottom
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+
+		//nose
+		{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+		{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+		{Pos: model.Position{-.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+		{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+		{Pos: model.Position{.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+		{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+
+		// tail
+		{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+		{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+		{Pos: model.Position{-.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+		{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+		{Pos: model.Position{.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+		{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
 	})
 
-	circle := model.New(device, createCircleVertices(64))
-
 	objects := []*object.GameObject{
-		object.New(circle, [3]float32{1.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
-			object.NewScale(0.1, 0.1),
-			object.NewTransition(0.5, 0.5),
-		}).WithMass(model.MassModel{
-			ID:       0,
-			Mass:     1,
-			Velocity: [2]float32{-0.5, 0.0},
-		}),
-		object.New(circle, [3]float32{0.0, 0.0, 1.0}).WithInitialTranforms([]object.Transform{
-			object.NewScale(0.1, 0.1),
-			object.NewTransition(-.45, -.25),
-		}).WithMass(model.MassModel{
-			ID:       1,
-			Mass:     1,
-			Velocity: [2]float32{0.5, 0.0},
+		object.New(cube, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+			object.NewScale(0.3, 0.3, 0.3),
+			object.NewTransition(0.0, 0.0, 2.5),
+		}).WithOnFrame(func(g *object.GameObject, since time.Duration) {
+			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
 		}),
 	}
 
-	for i := range 40 {
-		for j := range 40 {
-			objects = append(objects, object.New(rectangle, [3]float32{1.0, 1.0, 1.0}).WithInitialTranforms([]object.Transform{
-				object.NewScale(0.005, 0.005),
-				object.NewTransition(-1.0+(float64(i)+0.5)*2.0/40.0, -1.0+(float64(j)+0.5)*2.0/40.0),
-			}).WithField(model.FieldModel{
-				ID: i*40 + j,
-			}))
-		}
-	}
-
-	return []*model.Model{rectangle, circle}, objects
+	return []*model.Model{cube}, objects
 }
-
-// func transformVertices(depth int, vertices []model.Vertex) []model.Vertex {
-// 	upper := []model.Vertex{
-// 		vertices[0],
-// 		{
-// 			Pos: model.Position{
-// 				X: (vertices[0].Pos.X + vertices[1].Pos.X) * 0.5,
-// 				Y: (vertices[0].Pos.Y + vertices[1].Pos.Y) * 0.5,
-// 			},
-// 			RGB: vertices[1].RGB,
-// 		},
-// 		{
-// 			Pos: model.Position{
-// 				X: (vertices[0].Pos.X + vertices[2].Pos.X) * 0.5,
-// 				Y: (vertices[0].Pos.Y + vertices[2].Pos.Y) * 0.5,
-// 			},
-// 			RGB: vertices[2].RGB,
-// 		},
-// 	}
-
-// 	right := []model.Vertex{
-// 		{
-// 			Pos: model.Position{
-// 				X: (vertices[0].Pos.X + vertices[1].Pos.X) * 0.5,
-// 				Y: (vertices[0].Pos.Y + vertices[1].Pos.Y) * 0.5,
-// 			},
-// 			RGB: vertices[0].RGB,
-// 		},
-// 		vertices[1],
-// 		{
-// 			Pos: model.Position{
-// 				X: vertices[0].Pos.X,
-// 				Y: vertices[1].Pos.Y,
-// 			},
-// 			RGB: vertices[2].RGB,
-// 		},
-// 	}
-
-// 	left := []model.Vertex{
-// 		{
-// 			Pos: model.Position{
-// 				X: (vertices[0].Pos.X + vertices[2].Pos.X) * 0.5,
-// 				Y: (vertices[0].Pos.Y + vertices[2].Pos.Y) * 0.5,
-// 			},
-// 			RGB: vertices[0].RGB,
-// 		},
-// 		{
-// 			Pos: model.Position{
-// 				X: vertices[0].Pos.X,
-// 				Y: vertices[1].Pos.Y,
-// 			},
-// 			RGB: vertices[1].RGB,
-// 		},
-// 		vertices[2],
-// 	}
-
-// 	newVertices := []model.Vertex{}
-// 	if depth == 0 {
-// 		newVertices = append(newVertices, upper...)
-// 		newVertices = append(newVertices, right...)
-// 		newVertices = append(newVertices, left...)
-// 		return newVertices
-// 	}
-
-// 	newVertices = append(newVertices, transformVertices(depth-1, upper)...)
-// 	newVertices = append(newVertices, transformVertices(depth-1, right)...)
-// 	newVertices = append(newVertices, transformVertices(depth-1, left)...)
-// 	return newVertices
-// }

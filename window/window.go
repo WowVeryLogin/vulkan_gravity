@@ -6,12 +6,12 @@ import (
 )
 
 type Window struct {
-	window      *glfw.Window
+	Window      *glfw.Window
 	Extent      vulkan.Extent2D
 	SizeChanged bool
 }
 
-func New() Window {
+func New() *Window {
 	if err := glfw.Init(); err != nil {
 		panic("failed to initialize GLFW: " + err.Error())
 	}
@@ -22,8 +22,8 @@ func New() Window {
 		panic(err)
 	}
 
-	w := Window{
-		window: window,
+	w := &Window{
+		Window: window,
 		Extent: vulkan.Extent2D{
 			Width:  800,
 			Height: 600,
@@ -40,16 +40,16 @@ func New() Window {
 }
 
 func (w *Window) Close() {
-	w.window.Destroy()
+	w.Window.Destroy()
 	glfw.Terminate()
 }
 
 func (w *Window) ShouldClose() bool {
-	return w.window.ShouldClose()
+	return w.Window.ShouldClose()
 }
 
 func (w *Window) CreateSurface(instance vulkan.Instance) vulkan.Surface {
-	surface, err := w.window.CreateWindowSurface(instance, nil)
+	surface, err := w.Window.CreateWindowSurface(instance, nil)
 	if err != nil {
 		panic("failed to create window surface: " + err.Error())
 	}
@@ -59,7 +59,7 @@ func (w *Window) CreateSurface(instance vulkan.Instance) vulkan.Surface {
 
 func (w *Window) GetRequiredInstanceExtensions() []string {
 	var result []string
-	for _, e := range w.window.GetRequiredInstanceExtensions() {
+	for _, e := range w.Window.GetRequiredInstanceExtensions() {
 		result = append(result, e+"\x00")
 	}
 

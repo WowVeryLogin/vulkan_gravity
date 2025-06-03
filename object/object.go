@@ -14,7 +14,7 @@ type GameObject struct {
 	Model           *model.Model
 	color           [3]float32
 	transformations mat.Dense
-	offset          mat.Vector
+	offset          mat.VecDense
 	onFrame         func(g *GameObject, since time.Duration)
 	Mass            *model.MassModel
 	Field           *model.FieldModel
@@ -23,6 +23,7 @@ type GameObject struct {
 type Position struct {
 	X float64
 	Y float64
+	Z float64
 }
 
 type Transform interface {
@@ -35,18 +36,23 @@ func New(model *model.Model, color [3]float32) *GameObject {
 	everIncreasingID += 1
 
 	return &GameObject{
-		ID:              everIncreasingID,
-		Model:           model,
-		color:           color,
-		transformations: *mat.NewDense(2, 2, []float64{1, 0, 0, 1}),
-		offset:          mat.NewVecDense(2, []float64{0, 0}),
+		ID:     everIncreasingID,
+		Model:  model,
+		color:  color,
+		offset: *mat.NewVecDense(3, []float64{0, 0, 0}),
+		transformations: *mat.NewDense(3, 3, []float64{
+			1, 0, 0,
+			0, 1, 0,
+			0, 0, 1,
+		}),
 	}
 }
 
-func (g *GameObject) GetPosition() [2]float32 {
-	return [2]float32{
+func (g *GameObject) GetPosition() [3]float32 {
+	return [3]float32{
 		float32(g.offset.AtVec(0)),
 		float32(g.offset.AtVec(1)),
+		float32(g.offset.AtVec(2)),
 	}
 }
 
@@ -74,34 +80,36 @@ func (g *GameObject) WithOnFrame(onFrame func(g *GameObject, since time.Duration
 	return g
 }
 
-func (g *GameObject) Position() Position {
-	return Position{
-		X: g.offset.AtVec(0),
-		Y: g.offset.AtVec(1),
-	}
-}
-
-func (g *GameObject) Rotate(degress float64) {
-	*g = *NewRotate(degress).Transform(g)
+func (g *GameObject) Rotate(degress float64, vec [3]float64) {
+	*g = *NewRotate(degress, vec).Transform(g)
 }
 
 type Rotate struct {
 	rotate mat.Dense
 }
 
-func NewRotate(degrees float64) Rotate {
-	s := math.Sin(degrees * math.Pi / 180)
-	c := math.Cos(degrees * math.Pi / 180)
+func NewRotate(degrees float64, vec [3]float64) Rotate {
+	radians := degrees * math.Pi / 180.0
+
+	qvec := mat.NewVecDense(3, vec[:])
+	norm := mat.Norm(qvec, 2) // Euclidean (L2) norm
+	qvec.ScaleVec(1.0/norm*math.Sin(radians), qvec)
+	// Check for zero norm to avoid division by zero
+
+	q0, q1, q2, q3 := math.Cos(radians), qvec.AtVec(0), qvec.AtVec(1), qvec.AtVec(2)
+
 	return Rotate{
-		rotate: *mat.NewDense(2, 2, []float64{
-			c, -s, s, c,
+		rotate: *mat.NewDense(3, 3, []float64{
+			2.0*(q0*q0+q1*q1) - 1.0, 2.0 * (q1*q2 - q0*q3), 2.0 * (q1*q3 + q0*q2),
+			2.0 * (q1*q2 + q0*q3), 2.0*(q0*q0+q2*q2) - 1.0, 2.0 * (q2*q3 - q0*q1),
+			2.0 * (q1*q3 - q0*q2), 2.0 * (q2*q3 + q0*q1), 2.0*(q0*q0+q3*q3) - 1.0,
 		}),
 	}
 }
 
 func (r Rotate) Transform(g *GameObject) *GameObject {
 	result := mat.Dense{}
-	result.Mul(&g.transformations, &r.rotate)
+	result.Mul(&r.rotate, &g.transformations)
 	return &GameObject{
 		ID:              g.ID,
 		Model:           g.Model,
@@ -114,25 +122,27 @@ func (r Rotate) Transform(g *GameObject) *GameObject {
 	}
 }
 
-func (g *GameObject) Scale(x float64, y float64) {
-	g = NewScale(x, y).Transform(g)
+func (g *GameObject) Scale(x float64, y float64, z float64) {
+	g = NewScale(x, y, z).Transform(g)
 }
 
 type Scale struct {
 	scale mat.Dense
 }
 
-func NewScale(x float64, y float64) Scale {
+func NewScale(x float64, y float64, z float64) Scale {
 	return Scale{
-		scale: *mat.NewDense(2, 2, []float64{
-			x, 0, 0, y,
+		scale: *mat.NewDense(3, 3, []float64{
+			x, 0, 0,
+			0, y, 0,
+			0, 0, z,
 		}),
 	}
 }
 
 func (s Scale) Transform(g *GameObject) *GameObject {
 	result := mat.Dense{}
-	result.Mul(&g.transformations, &s.scale)
+	result.Mul(&s.scale, &g.transformations)
 	return &GameObject{
 		ID:              g.ID,
 		Model:           g.Model,
@@ -145,28 +155,30 @@ func (s Scale) Transform(g *GameObject) *GameObject {
 	}
 }
 
-func (g *GameObject) Transition(x float64, y float64) {
-	*g = *NewTransition(x, y).Transform(g)
+func (g *GameObject) Transition(x float64, y float64, z float64) {
+	*g = *NewTransition(x, y, z).Transform(g)
 }
 
 type Transition struct {
 	offset mat.VecDense
 }
 
-func NewTransition(x float64, y float64) Transition {
+func NewTransition(x float64, y float64, z float64) Transition {
 	return Transition{
-		offset: *mat.NewVecDense(2, []float64{x, y}),
+		offset: *mat.NewVecDense(3, []float64{x, y, z}),
 	}
 }
 
 func (t Transition) Transform(g *GameObject) *GameObject {
 	result := mat.VecDense{}
-	result.AddVec(g.offset, &t.offset)
+
+	result.AddVec(&g.offset, &t.offset)
+
 	return &GameObject{
 		ID:              g.ID,
 		Model:           g.Model,
 		transformations: g.transformations,
-		offset:          &result,
+		offset:          result,
 		onFrame:         g.onFrame,
 		color:           g.color,
 		Mass:            g.Mass,
@@ -179,30 +191,17 @@ func (g *GameObject) ToPushData(since time.Duration) *pipeline.PushData {
 		g.onFrame(g, since)
 	}
 
-	transformation := [4]float32{}
-	for i, v := range g.transformations.RawMatrix().Data {
-		transformation[i] = float32(v)
+	transformation := [16]float32{}
+	for i := range 3 {
+		for j, v := range g.transformations.RawRowView(i) {
+			transformation[j*4+i] = float32(v)
+		}
+		transformation[4*3+i] = float32(g.offset.AtVec(i))
 	}
-
-	offset := [2]float32{}
-	offset[0] = float32(g.offset.AtVec(0))
-	offset[1] = float32(g.offset.AtVec(1))
-
-	isField := uint32(0)
-	id := g.ID
-	if g.Field != nil {
-		isField = 1
-		id = g.Field.ID
-	} else {
-		isField = 0
-		id = g.Mass.ID
-	}
+	transformation[15] = 1.0
 
 	return &pipeline.PushData{
 		Transformation: transformation,
-		Offset:         offset,
 		Color:          g.color,
-		IsField:        isField,
-		Index:          uint32(id),
 	}
 }

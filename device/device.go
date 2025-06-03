@@ -30,7 +30,7 @@ func checkValidationLayers() {
 	panic(fmt.Sprintf("validation layer %s not found", "VK_LAYER_KHRONOS_validation"))
 }
 
-func newInstance(withValidation bool, w window.Window) vulkan.Instance {
+func newInstance(withValidation bool, w *window.Window) vulkan.Instance {
 	if withValidation {
 		checkValidationLayers()
 	}
@@ -210,7 +210,7 @@ type Device struct {
 	ComputePool     vulkan.CommandPool
 }
 
-func New(w window.Window) *Device {
+func New(w *window.Window) *Device {
 	instance := newInstance(true, w)
 	surface := w.CreateSurface(instance)
 	device, err := pickPhysicalDevice(instance)

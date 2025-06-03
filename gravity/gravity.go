@@ -12,20 +12,20 @@ import (
 )
 
 type ObjectWithMass struct {
-	position [2]float32
-	velocity [2]float32
+	position [3]float32
+	velocity [3]float32
 	mass     float32
 	_        [3]float32 // padding to make struct 24 bytes (multiple of 8)
 }
 
 type ForceField struct {
-	force [2]float32
-	_     [2]float32
+	force [3]float32
+	_     [1]float32
 }
 
 type VectorField struct {
-	position [2]float32
-	_        [2]float32
+	position [3]float32
+	_        [1]float32
 }
 
 type pushMassData struct {
