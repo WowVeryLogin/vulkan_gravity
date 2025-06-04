@@ -127,71 +127,80 @@ func createCircleVertices(numSides int) []model.Vertex {
 }
 
 func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObject) {
-	cube := model.New(device, []model.Vertex{
-		//left
-		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
-		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
-		{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
-		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
-		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// cube := model.New(device, []model.Vertex{
+	// 	//left
+	// 	{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// 	{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// 	{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// 	{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// 	{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{0.9, 0.9, 0.9}},
+	// 	{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{0.9, 0.9, 0.9}},
 
-		//right
-		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
-		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.8, .8, .1}},
-		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
-		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .8, .1}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
+	// 	//right
+	// 	{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
+	// 	{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
+	// 	{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.8, .8, .1}},
+	// 	{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.8, .8, .1}},
+	// 	{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .8, .1}},
+	// 	{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .8, .1}},
 
-		// top
-		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
-		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
-		{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
-		{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
-		{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
-		{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+	// 	// top
+	// 	{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+	// 	{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+	// 	{Pos: model.Position{-.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
+	// 	{Pos: model.Position{-.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+	// 	{Pos: model.Position{.5, -.5, -.5}, RGB: [3]float32{.9, .6, .1}},
+	// 	{Pos: model.Position{.5, -.5, .5}, RGB: [3]float32{.9, .6, .1}},
 
-		// bottom
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
-		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
-		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+	// 	// bottom
+	// 	{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+	// 	{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+	// 	{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
+	// 	{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+	// 	{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.8, .1, .1}},
+	// 	{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.8, .1, .1}},
 
-		//nose
-		{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
-		{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
-		{Pos: model.Position{-.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
-		{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
-		{Pos: model.Position{.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
-		{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	//nose
+	// 	{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	{Pos: model.Position{-.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	{Pos: model.Position{-.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	{Pos: model.Position{.5, -.5, 0.5}, RGB: [3]float32{.1, .1, .8}},
+	// 	{Pos: model.Position{.5, .5, 0.5}, RGB: [3]float32{.1, .1, .8}},
 
-		// tail
-		{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-		{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-		{Pos: model.Position{-.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-		{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-		{Pos: model.Position{.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-		{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
-	})
+	// 	// tail
+	// 	{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// 	{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// 	{Pos: model.Position{-.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// 	{Pos: model.Position{-.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// 	{Pos: model.Position{.5, -.5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// 	{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
+	// })
+
+	avocado := model.NewWithGLTF(device, "assets/avocado.glb")
 
 	floor := model.New(device, []model.Vertex{
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
-		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
-		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
+	}, []uint32{
+		0, 1, 2,
+		0, 3, 1,
 	})
 
 	objects := []*object.GameObject{
-		object.New(cube, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
-			object.NewScale(0.3, 0.3, 0.3),
-			object.NewTransition(0.0, 0.0, 2.5),
+		// object.New(cube, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+		// 	object.NewScale(0.3, 0.3, 0.3),
+		// 	object.NewTransition(0.0, 0.0, 2.5),
+		// }).WithOnFrame(func(g *object.GameObject, since time.Duration) {
+		// 	g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
+		// }),
+		object.New(avocado, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+			object.NewScale(10.0, 10.0, 10.0),
+			object.NewTransition(0.0, -1.0, 2.5),
 		}).WithOnFrame(func(g *object.GameObject, since time.Duration) {
-			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
+			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{0, 1, 0})
 		}),
 		object.New(floor, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
 			object.NewScale(5.0, 5.0, 5.0),
@@ -199,5 +208,5 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 		}),
 	}
 
-	return []*model.Model{cube, floor}, objects
+	return []*model.Model{avocado, floor}, objects
 }

@@ -234,65 +234,8 @@ func New(device *device.Device) *Gravity {
 	}
 }
 
-func copyWithStagingBuffer[T any](
-	device *device.Device,
-	initialBuffer []T,
-	copyFn func(commandBuffer vulkan.CommandBuffer, staging vulkan.Buffer),
-) {
-	bufferSize := len(initialBuffer) * int(unsafe.Sizeof(initialBuffer[0]))
-
-	buffer, memory := device.CreateBuffer(
-		vulkan.DeviceSize(bufferSize),
-		vulkan.BufferUsageFlags(vulkan.BufferUsageTransferSrcBit),
-		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyHostVisibleBit|vulkan.MemoryPropertyHostCoherentBit),
-	)
-
-	var data unsafe.Pointer
-	if err := vulkan.Error(vulkan.MapMemory(device.LogicalDevice, memory, 0, vulkan.DeviceSize(bufferSize), 0, &data)); err != nil {
-		panic("failed to map buffer memory: " + err.Error())
-	}
-	slice := unsafe.Slice((*T)(data), len(initialBuffer))
-	copy(slice, initialBuffer)
-	vulkan.UnmapMemory(device.LogicalDevice, memory)
-
-	commandBuffer := make([]vulkan.CommandBuffer, 1)
-	if err := vulkan.Error(vulkan.AllocateCommandBuffers(device.LogicalDevice, &vulkan.CommandBufferAllocateInfo{
-		SType:              vulkan.StructureTypeCommandBufferAllocateInfo,
-		Level:              vulkan.CommandBufferLevelPrimary,
-		CommandPool:        device.ComputePool,
-		CommandBufferCount: 1,
-	}, commandBuffer)); err != nil {
-		panic("failed to allocate command buffers: " + err.Error())
-	}
-
-	if err := vulkan.Error(vulkan.BeginCommandBuffer(commandBuffer[0], &vulkan.CommandBufferBeginInfo{
-		SType: vulkan.StructureTypeCommandBufferBeginInfo,
-		Flags: vulkan.CommandBufferUsageFlags(vulkan.CommandBufferUsageOneTimeSubmitBit),
-	})); err != nil {
-		panic("failed to begin recording command buffer: " + err.Error())
-	}
-
-	copyFn(commandBuffer[0], buffer)
-
-	if err := vulkan.Error(vulkan.EndCommandBuffer(commandBuffer[0])); err != nil {
-		panic("failed to end command buffer: " + err.Error())
-	}
-
-	vulkan.QueueSubmit(device.ComputeQueue, 1, []vulkan.SubmitInfo{
-		{
-			SType:              vulkan.StructureTypeSubmitInfo,
-			CommandBufferCount: 1,
-			PCommandBuffers:    commandBuffer,
-		},
-	}, nil)
-	vulkan.QueueWaitIdle(device.ComputeQueue)
-	vulkan.FreeCommandBuffers(device.LogicalDevice, device.ComputePool, 1, commandBuffer)
-	vulkan.DestroyBuffer(device.LogicalDevice, buffer, nil)
-	vulkan.FreeMemory(device.LogicalDevice, memory, nil)
-}
-
 func (g *Gravity) UploadMassObjects(
-	device *device.Device,
+	dev *device.Device,
 	objects []*object.GameObject,
 ) {
 	var massObjects []ObjectWithMass
@@ -309,14 +252,14 @@ func (g *Gravity) UploadMassObjects(
 	bufferSize := int(unsafe.Sizeof(ObjectWithMass{})) * g.massElementsCount
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		g.buffers[i].massBuffer, g.buffers[i].massMemory = device.CreateBuffer(
+		g.buffers[i].massBuffer, g.buffers[i].massMemory = dev.CreateBuffer(
 			vulkan.DeviceSize(bufferSize),
 			vulkan.BufferUsageFlags(vulkan.BufferUsageVertexBufferBit|vulkan.BufferUsageStorageBufferBit|vulkan.BufferUsageTransferDstBit),
 			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
 		)
 	}
 
-	copyWithStagingBuffer(device, massObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
+	device.CopyWithStagingBufferCompute(dev, massObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
 		for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
 			vulkan.CmdCopyBuffer(cb, staging, g.buffers[i].massBuffer, 1, []vulkan.BufferCopy{
 				{
@@ -329,7 +272,7 @@ func (g *Gravity) UploadMassObjects(
 	})
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		vulkan.UpdateDescriptorSets(device.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
+		vulkan.UpdateDescriptorSets(dev.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
 			{
 				SType:           vulkan.StructureTypeWriteDescriptorSet,
 				DstSet:          g.DescriptorsSets[i],
@@ -365,7 +308,7 @@ func (g *Gravity) UploadMassObjects(
 }
 
 func (g *Gravity) UploadFieldObjects(
-	device *device.Device,
+	dev *device.Device,
 	objects []*object.GameObject,
 ) {
 	var fieldObjects []VectorField
@@ -380,20 +323,20 @@ func (g *Gravity) UploadFieldObjects(
 	bufferSize := int(unsafe.Sizeof(VectorField{})) * g.fieldElementsCount
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		g.buffers[i].forceBuffer, g.buffers[i].forceMemory = device.CreateBuffer(
+		g.buffers[i].forceBuffer, g.buffers[i].forceMemory = dev.CreateBuffer(
 			vulkan.DeviceSize(g.fieldElementsCount*int(unsafe.Sizeof(ForceField{}))),
 			vulkan.BufferUsageFlags(vulkan.BufferUsageVertexBufferBit|vulkan.BufferUsageStorageBufferBit),
 			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
 		)
 	}
 
-	g.vecBuffer, g.vecMemory = device.CreateBuffer(
+	g.vecBuffer, g.vecMemory = dev.CreateBuffer(
 		vulkan.DeviceSize(g.fieldElementsCount*int(unsafe.Sizeof(VectorField{}))),
 		vulkan.BufferUsageFlags(vulkan.BufferUsageStorageBufferBit|vulkan.BufferUsageTransferDstBit),
 		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
 	)
 
-	copyWithStagingBuffer(device, fieldObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
+	device.CopyWithStagingBufferCompute(dev, fieldObjects, func(cb vulkan.CommandBuffer, staging vulkan.Buffer) {
 		vulkan.CmdCopyBuffer(cb, staging, g.vecBuffer, 1, []vulkan.BufferCopy{
 			{
 				SrcOffset: 0,
@@ -404,7 +347,7 @@ func (g *Gravity) UploadFieldObjects(
 	})
 
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
-		vulkan.UpdateDescriptorSets(device.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
+		vulkan.UpdateDescriptorSets(dev.LogicalDevice, 2, []vulkan.WriteDescriptorSet{
 			{
 				SType:           vulkan.StructureTypeWriteDescriptorSet,
 				DstSet:          g.DescriptorsSets[i],

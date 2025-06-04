@@ -36,11 +36,12 @@ func (d *Drawer) RenderGameObects(
 	since := time.Since(d.lastRenderedTime)
 	d.lastRenderedTime = time.Now()
 
-	cameraMatrix := camera.ToMatrix()
+	view, projection := camera.ToMatrix()
 
 	for _, obj := range gameObjects {
 		data := obj.ToPushData(since)
-		data.Camera = cameraMatrix
+		data.View = view
+		data.Projection = projection
 
 		vulkan.CmdPushConstants(
 			commandBuffer,

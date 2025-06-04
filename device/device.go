@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"game/window"
+	"unsafe"
 
 	"github.com/goki/vulkan"
 )
@@ -349,6 +350,81 @@ type SwapchainProperties struct {
 	Caps     vulkan.SurfaceCapabilities
 	Formats  []vulkan.SurfaceFormat
 	Presents []vulkan.PresentMode
+}
+
+func CopyWithStagingBufferGraphic[T any](
+	device *Device,
+	initialBuffer []T,
+	copyFn func(commandBuffer vulkan.CommandBuffer, staging vulkan.Buffer),
+) {
+	copyWithStagingBuffer(device, device.Queue, device.Pool, initialBuffer, copyFn)
+}
+
+func CopyWithStagingBufferCompute[T any](
+	device *Device,
+	initialBuffer []T,
+	copyFn func(commandBuffer vulkan.CommandBuffer, staging vulkan.Buffer),
+) {
+	copyWithStagingBuffer(device, device.ComputeQueue, device.ComputePool, initialBuffer, copyFn)
+}
+
+func copyWithStagingBuffer[T any](
+	device *Device,
+	queue vulkan.Queue,
+	pool vulkan.CommandPool,
+	initialBuffer []T,
+	copyFn func(commandBuffer vulkan.CommandBuffer, staging vulkan.Buffer),
+) {
+	bufferSize := len(initialBuffer) * int(unsafe.Sizeof(initialBuffer[0]))
+
+	buffer, memory := device.CreateBuffer(
+		vulkan.DeviceSize(bufferSize),
+		vulkan.BufferUsageFlags(vulkan.BufferUsageTransferSrcBit),
+		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyHostVisibleBit|vulkan.MemoryPropertyHostCoherentBit),
+	)
+
+	var data unsafe.Pointer
+	if err := vulkan.Error(vulkan.MapMemory(device.LogicalDevice, memory, 0, vulkan.DeviceSize(bufferSize), 0, &data)); err != nil {
+		panic("failed to map buffer memory: " + err.Error())
+	}
+	slice := unsafe.Slice((*T)(data), len(initialBuffer))
+	copy(slice, initialBuffer)
+	vulkan.UnmapMemory(device.LogicalDevice, memory)
+
+	commandBuffer := make([]vulkan.CommandBuffer, 1)
+	if err := vulkan.Error(vulkan.AllocateCommandBuffers(device.LogicalDevice, &vulkan.CommandBufferAllocateInfo{
+		SType:              vulkan.StructureTypeCommandBufferAllocateInfo,
+		Level:              vulkan.CommandBufferLevelPrimary,
+		CommandPool:        pool,
+		CommandBufferCount: 1,
+	}, commandBuffer)); err != nil {
+		panic("failed to allocate command buffers: " + err.Error())
+	}
+
+	if err := vulkan.Error(vulkan.BeginCommandBuffer(commandBuffer[0], &vulkan.CommandBufferBeginInfo{
+		SType: vulkan.StructureTypeCommandBufferBeginInfo,
+		Flags: vulkan.CommandBufferUsageFlags(vulkan.CommandBufferUsageOneTimeSubmitBit),
+	})); err != nil {
+		panic("failed to begin recording command buffer: " + err.Error())
+	}
+
+	copyFn(commandBuffer[0], buffer)
+
+	if err := vulkan.Error(vulkan.EndCommandBuffer(commandBuffer[0])); err != nil {
+		panic("failed to end command buffer: " + err.Error())
+	}
+
+	vulkan.QueueSubmit(queue, 1, []vulkan.SubmitInfo{
+		{
+			SType:              vulkan.StructureTypeSubmitInfo,
+			CommandBufferCount: 1,
+			PCommandBuffers:    commandBuffer,
+		},
+	}, nil)
+	vulkan.QueueWaitIdle(queue)
+	vulkan.FreeCommandBuffers(device.LogicalDevice, pool, 1, commandBuffer)
+	vulkan.DestroyBuffer(device.LogicalDevice, buffer, nil)
+	vulkan.FreeMemory(device.LogicalDevice, memory, nil)
 }
 
 func (v *Device) SwapchainSupport() SwapchainProperties {

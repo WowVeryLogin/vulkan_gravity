@@ -17,7 +17,8 @@ type Pipeline struct {
 }
 
 type PushData struct {
-	Camera         [16]float32
+	Projection     [16]float32
+	View           [16]float32
 	Transformation [16]float32
 	Color          [3]float32
 	_              float32

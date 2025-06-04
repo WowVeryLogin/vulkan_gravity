@@ -34,7 +34,17 @@ func rotateVectorByQuaternion(v []float64, q []float64) []float64 {
 	return result[1:]
 }
 
-func (c *Camera) ToMatrix() [16]float32 {
+func toColomnData(m *mat.Dense) [16]float32 {
+	var result [16]float32
+	for i := range 4 {
+		for j, v := range m.RawRowView(i) {
+			result[j*4+i] = float32(v)
+		}
+	}
+	return result
+}
+
+func (c *Camera) ToMatrix() ([16]float32, [16]float32) {
 	pitchQ := makeQuaternion(c.pitch, [3]float64{1, 0, 0})
 	yawnQ := makeQuaternion(c.yaw, [3]float64{0, 1, 0})
 	quat := quatMultiply(yawnQ[:], pitchQ[:])
@@ -42,21 +52,14 @@ func (c *Camera) ToMatrix() [16]float32 {
 
 	moveRotated := rotateVectorByQuaternion(c.move.RawVector().Data, []float64{q0, q1, q2, q3})
 
-	var result mat.Dense
-	result.Mul(c.matrix, mat.NewDense(4, 4, []float64{
+	view := mat.NewDense(4, 4, []float64{
 		2.0*(q0*q0+q1*q1) - 1.0, 2.0 * (q1*q2 - q0*q3), 2.0 * (q1*q3 + q0*q2), moveRotated[0],
 		2.0 * (q1*q2 + q0*q3), 2.0*(q0*q0+q2*q2) - 1.0, 2.0 * (q2*q3 - q0*q1), moveRotated[1],
 		2.0 * (q1*q3 - q0*q2), 2.0 * (q2*q3 + q0*q1), 2.0*(q0*q0+q3*q3) - 1.0, moveRotated[2],
 		0, 0, 0, 1,
-	}))
+	})
 
-	var camera [16]float32
-	for i := range 4 {
-		for j, v := range result.RawRowView(i) {
-			camera[j*4+i] = float32(v)
-		}
-	}
-	return camera
+	return toColomnData(view), toColomnData(c.matrix)
 }
 
 func (c *Camera) Move(x, y, z float64) {
