@@ -54,7 +54,7 @@ func New() *App {
 		gameObjectsDrawer: drawer,
 		renderer:          renderer,
 		camera:            camera,
-		cameraController:  camcontroller.New(),
+		cameraController:  camcontroller.New(window),
 		models:            models,
 		gameObjects:       objects,
 	}
@@ -177,6 +177,15 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 		{Pos: model.Position{.5, .5, -0.5}, RGB: [3]float32{.1, .8, .1}},
 	})
 
+	floor := model.New(device, []model.Vertex{
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}},
+	})
+
 	objects := []*object.GameObject{
 		object.New(cube, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
 			object.NewScale(0.3, 0.3, 0.3),
@@ -184,7 +193,11 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 		}).WithOnFrame(func(g *object.GameObject, since time.Duration) {
 			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
 		}),
+		object.New(floor, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+			object.NewScale(5.0, 5.0, 5.0),
+			object.NewTransition(0.0, -2.0, 2.5),
+		}),
 	}
 
-	return []*model.Model{cube}, objects
+	return []*model.Model{cube, floor}, objects
 }

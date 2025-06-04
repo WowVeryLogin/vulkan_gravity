@@ -17,10 +17,13 @@ func New() *Window {
 	}
 	glfw.WindowHint(glfw.ClientAPI, glfw.NoAPI)
 	glfw.WindowHint(glfw.Resizable, glfw.True)
+	// monitor := glfw.GetPrimaryMonitor()
+
 	window, err := glfw.CreateWindow(800, 600, "Game App", nil, nil)
 	if err != nil {
 		panic(err)
 	}
+	window.SetInputMode(glfw.CursorMode, glfw.CursorDisabled)
 
 	w := &Window{
 		Window: window,
