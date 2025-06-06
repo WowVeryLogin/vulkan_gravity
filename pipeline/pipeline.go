@@ -17,8 +17,6 @@ type Pipeline struct {
 }
 
 type PushData struct {
-	Projection     [16]float32
-	View           [16]float32
 	Transformation [16]float32
 	Color          [3]float32
 	_              float32
@@ -27,6 +25,7 @@ type PushData struct {
 func New(
 	device *device.Device,
 	renderPass vulkan.RenderPass,
+	descriptorsLayout []vulkan.DescriptorSetLayout,
 ) *Pipeline {
 	vertModule := shader.CreateShaderModule("shaders/vert.spv", device.LogicalDevice)
 	fragModule := shader.CreateShaderModule("shaders/frag.spv", device.LogicalDevice)
@@ -42,10 +41,8 @@ func New(
 				Size:       uint32(unsafe.Sizeof(PushData{})),
 			},
 		},
-		// SetLayoutCount: 1,
-		// PSetLayouts: []vulkan.DescriptorSetLayout{
-		// 	descriptorsLayout,
-		// },
+		SetLayoutCount: uint32(len(descriptorsLayout)),
+		PSetLayouts:    descriptorsLayout,
 	}, nil, &layout)); err != nil {
 		panic("failed to create pipeline layout: " + err.Error())
 	}

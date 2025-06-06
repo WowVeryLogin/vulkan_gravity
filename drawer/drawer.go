@@ -1,7 +1,7 @@
 package drawer
 
 import (
-	"game/camera"
+	"game/descriptors"
 	"game/device"
 	"game/object"
 	"game/pipeline"
@@ -19,9 +19,10 @@ type Drawer struct {
 func New(
 	device *device.Device,
 	renderPass vulkan.RenderPass,
+	descriptorsLayout []vulkan.DescriptorSetLayout,
 ) *Drawer {
 	return &Drawer{
-		pipeline:         pipeline.New(device, renderPass),
+		pipeline:         pipeline.New(device, renderPass, descriptorsLayout),
 		lastRenderedTime: time.Now(),
 	}
 }
@@ -29,19 +30,30 @@ func New(
 func (d *Drawer) RenderGameObects(
 	commandBuffer vulkan.CommandBuffer,
 	gameObjects []*object.GameObject,
-	camera *camera.Camera,
+	worldDescriptorSet *descriptors.DescriptorsSet,
+	frameDescriptorSet *descriptors.DescriptorsSet,
 ) {
 	d.pipeline.Bind(commandBuffer)
 
 	since := time.Since(d.lastRenderedTime)
 	d.lastRenderedTime = time.Now()
 
-	view, projection := camera.ToMatrix()
+	vulkan.CmdBindDescriptorSets(
+		commandBuffer,
+		vulkan.PipelineBindPointGraphics,
+		d.pipeline.Layout,
+		0,
+		2,
+		[]vulkan.DescriptorSet{
+			worldDescriptorSet.Set,
+			frameDescriptorSet.Set,
+		},
+		0,
+		nil,
+	)
 
 	for _, obj := range gameObjects {
 		data := obj.ToPushData(since)
-		data.View = view
-		data.Projection = projection
 
 		vulkan.CmdPushConstants(
 			commandBuffer,

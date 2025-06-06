@@ -44,7 +44,7 @@ func toColomnData(m *mat.Dense) [16]float32 {
 	return result
 }
 
-func (c *Camera) ToMatrix() ([16]float32, [16]float32) {
+func (c *Camera) GetUbo() CameraUbo {
 	pitchQ := makeQuaternion(c.pitch, [3]float64{1, 0, 0})
 	yawnQ := makeQuaternion(c.yaw, [3]float64{0, 1, 0})
 	quat := quatMultiply(yawnQ[:], pitchQ[:])
@@ -59,7 +59,17 @@ func (c *Camera) ToMatrix() ([16]float32, [16]float32) {
 		0, 0, 0, 1,
 	})
 
-	return toColomnData(view), toColomnData(c.matrix)
+	return CameraUbo{
+		view:          toColomnData(view),
+		lightPosition: [3]float32{-1, 0, 0},
+		lightColor:    [4]float32{0, 1, 0, 1},
+	}
+}
+
+func (c Camera) GetWorldUbo() WorldUbo {
+	return WorldUbo{
+		projection: toColomnData(c.matrix),
+	}
 }
 
 func (c *Camera) Move(x, y, z float64) {
@@ -124,4 +134,15 @@ func (c *Camera) Update(aspect float32) {
 		0, 0, float64(c.far) / float64(c.far-c.near), float64(c.far*c.near) / float64(c.near-c.far),
 		0, 0, 1, 0,
 	})
+}
+
+type WorldUbo struct {
+	projection [16]float32
+}
+
+type CameraUbo struct {
+	view          [16]float32
+	lightPosition [3]float32
+	padding       float32
+	lightColor    [4]float32
 }

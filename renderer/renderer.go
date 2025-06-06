@@ -17,7 +17,7 @@ type Renderer struct {
 	CommandBuffers   []MultistageCommandBuffer
 	swapchainFactory *swapchain.SwapchainFactory
 	imageIdx         int
-	frameIdx         int
+	FrameIdx         int
 }
 
 func createCommandBuffers(device *device.Device) []MultistageCommandBuffer {
@@ -73,33 +73,31 @@ func (r *Renderer) UpdateSwapchain(extent vulkan.Extent2D) {
 	r.swapchainFactory.UpdateSwapchain(extent)
 }
 
-func (r *Renderer) BeginFrame() (*MultistageCommandBuffer, uint32, error) {
+func (r *Renderer) BeginFrame() (*MultistageCommandBuffer, error) {
 	var err error
-	r.imageIdx, err = r.swapchainFactory.Swapchain.NextImage(r.frameIdx)
+	r.imageIdx, err = r.swapchainFactory.Swapchain.NextImage(r.FrameIdx)
 	if err == swapchain.ErrOutOfDate {
-		return nil, 0, err
+		return nil, err
 	}
 
-	cb := r.CommandBuffers[r.frameIdx]
+	cb := r.CommandBuffers[r.FrameIdx]
 
+	if err := vulkan.Error(vulkan.BeginCommandBuffer(cb.GraphicsCommandBuffer, &vulkan.CommandBufferBeginInfo{
+		SType: vulkan.StructureTypeCommandBufferBeginInfo,
+	})); err != nil {
+		panic("failed to begin recording command buffer:" + err.Error())
+	}
 	// if err := vulkan.Error(vulkan.BeginCommandBuffer(cb.ComputeCommandBuffer, &vulkan.CommandBufferBeginInfo{
 	// 	SType: vulkan.StructureTypeCommandBufferBeginInfo,
 	// })); err != nil {
 	// 	panic("failed to begin recording command buffer:" + err.Error())
 	// }
 
-	return &cb, uint32(r.frameIdx), nil
+	return &cb, nil
 }
 
 func (r *Renderer) BeginSwapChainRenderPass() {
-	cb := r.CommandBuffers[r.frameIdx].GraphicsCommandBuffer
-
-	if err := vulkan.Error(vulkan.BeginCommandBuffer(cb, &vulkan.CommandBufferBeginInfo{
-		SType: vulkan.StructureTypeCommandBufferBeginInfo,
-	})); err != nil {
-		panic("failed to begin recording command buffer:" + err.Error())
-	}
-
+	cb := r.CommandBuffers[r.FrameIdx].GraphicsCommandBuffer
 	vulkan.CmdBeginRenderPass(cb, &vulkan.RenderPassBeginInfo{
 		SType:       vulkan.StructureTypeRenderPassBeginInfo,
 		RenderPass:  r.swapchainFactory.RenderPass,
@@ -136,21 +134,21 @@ func (r *Renderer) BeginSwapChainRenderPass() {
 }
 
 func (r *Renderer) EndSwapChainRenderPass() {
-	vulkan.CmdEndRenderPass(r.CommandBuffers[r.frameIdx].GraphicsCommandBuffer)
+	vulkan.CmdEndRenderPass(r.CommandBuffers[r.FrameIdx].GraphicsCommandBuffer)
 }
 
 func (r *Renderer) EndFrame() error {
-	if err := vulkan.Error(vulkan.EndCommandBuffer(r.CommandBuffers[r.frameIdx].GraphicsCommandBuffer)); err != nil {
+	if err := vulkan.Error(vulkan.EndCommandBuffer(r.CommandBuffers[r.FrameIdx].GraphicsCommandBuffer)); err != nil {
 		panic("failed to end command buffer: " + err.Error())
 	}
 	if err := r.swapchainFactory.Swapchain.SubmitCommandBuffer(
-		r.CommandBuffers[r.frameIdx].GraphicsCommandBuffer,
-		uint32(r.frameIdx),
+		r.CommandBuffers[r.FrameIdx].GraphicsCommandBuffer,
+		uint32(r.FrameIdx),
 		uint32(r.imageIdx),
 	); err != nil {
 		return err
 	}
-	r.frameIdx = (r.frameIdx + 1) % swapchain.MAX_FRAMES_IN_FLIGHT
+	r.FrameIdx = (r.FrameIdx + 1) % swapchain.MAX_FRAMES_IN_FLIGHT
 	return nil
 }
 
