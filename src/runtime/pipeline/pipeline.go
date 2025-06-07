@@ -7,8 +7,8 @@ import (
 
 type PushData struct {
 	Transformation [16]float32
-	Color          [3]float32
-	_              float32
+	TextureType    int32
+	_              [15]float32
 }
 
 func NewLayout(

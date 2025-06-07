@@ -1,12 +1,20 @@
 package model
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math"
+	"os"
+	"strings"
 	"unsafe"
 
+	_ "image/png"
+
 	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/texture"
 	"github.com/goki/vulkan"
 	"github.com/qmuntal/gltf"
 )
@@ -21,6 +29,7 @@ type Model struct {
 	numIndexes  uint32
 	indexBuffer vulkan.Buffer
 	indexMemory vulkan.DeviceMemory
+	Texture     *texture.Texture
 }
 
 type Position struct {
@@ -71,7 +80,7 @@ var VertexAttributeDescription = []vulkan.VertexInputAttributeDescription{
 	},
 }
 
-func modelFromGLTF(gltfFile string) ([]Vertex, []uint32) {
+func modelFromGLTF(gltfFile string) ([]Vertex, []uint32, []*texture.TextureConfig) {
 	doc, err := gltf.Open(gltfFile)
 	if err != nil {
 		log.Fatal(err)
@@ -96,13 +105,29 @@ func modelFromGLTF(gltfFile string) ([]Vertex, []uint32) {
 				byteStride = 12 // 3 * 4 bytes (float32)
 			}
 
+			var uvData []byte
+			var uvStride int
+			uvAccessorIndex, hasUV := primitive.Attributes["TEXCOORD_0"]
+			if hasUV {
+				uvAccessor := doc.Accessors[uvAccessorIndex]
+				uvBufferView := doc.BufferViews[*uvAccessor.BufferView]
+				uvBuffer := doc.Buffers[uvBufferView.Buffer]
+
+				uvData = uvBuffer.Data[uvBufferView.ByteOffset : uvBufferView.ByteOffset+uvBufferView.ByteLength]
+				uvStride = uvBufferView.ByteStride
+				if uvStride == 0 {
+					uvStride = 8 // 2 * float32 for UV coords
+				}
+			}
+
 			primitiveVertices := []Vertex{}
 			for i := 0; i < vertexCount; i++ {
 				offset := i*byteStride + int(posAccessor.ByteOffset)
 				x := binary.LittleEndian.Uint32(posData[offset+0:])
 				y := binary.LittleEndian.Uint32(posData[offset+4:])
 				z := binary.LittleEndian.Uint32(posData[offset+8:])
-				primitiveVertices = append(primitiveVertices, Vertex{
+
+				v := Vertex{
 					Pos: Position{
 						X: math.Float32frombits(x),
 						Y: math.Float32frombits(y),
@@ -111,7 +136,18 @@ func modelFromGLTF(gltfFile string) ([]Vertex, []uint32) {
 					RGB:    [3]float32{1, 1, 1}, // Default color
 					Normal: [3]float32{0, 0, 0}, // Default normal
 					UV:     [2]float32{0, 0},    // Default UV
-				})
+				}
+				if hasUV {
+					uvOffset := i*uvStride + int(doc.Accessors[primitive.Attributes["TEXCOORD_0"]].ByteOffset)
+					ubits0 := binary.LittleEndian.Uint32(uvData[uvOffset : uvOffset+4])
+					ubits1 := binary.LittleEndian.Uint32(uvData[uvOffset+4 : uvOffset+8])
+
+					u := math.Float32frombits(ubits0)
+					vv := math.Float32frombits(ubits1)
+					v.UV = [2]float32{u, vv}
+				}
+
+				primitiveVertices = append(primitiveVertices, v)
 			}
 
 			normAccessorIdx, ok := primitive.Attributes["NORMAL"]
@@ -157,16 +193,66 @@ func modelFromGLTF(gltfFile string) ([]Vertex, []uint32) {
 		}
 	}
 
-	return vertices, indexes
+	var textures []*texture.TextureConfig
+	for i, tex := range doc.Textures {
+		if tex.Source == nil || int(*tex.Source) >= len(doc.Images) {
+			fmt.Printf("Texture %d has no valid source image\n", i)
+			continue
+		}
+
+		img := doc.Images[*tex.Source]
+		fmt.Printf("Texture %d: MIME Type = %s\n", i, img.MimeType)
+
+		// Get image data
+		textureRaw, err := extractImageData(doc, img)
+		if err != nil {
+			fmt.Printf("  Failed to extract image data: %v\n", err)
+			continue
+		}
+
+		textures = append(textures, texture.TextureConfigFromPNG(bytes.NewReader(textureRaw)))
+	}
+
+	return vertices, indexes, textures
+}
+
+func extractImageData(doc *gltf.Document, img *gltf.Image) ([]byte, error) {
+	if img.URI != "" {
+		// Data URI (base64-encoded) or external file
+		if strings.HasPrefix(img.URI, "data:") {
+			// Parse data URI
+			parts := strings.SplitN(img.URI, ",", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid data URI")
+			}
+			return base64.StdEncoding.DecodeString(parts[1])
+		}
+
+		// External image file — load separately if needed
+		return os.ReadFile(img.URI)
+	}
+
+	// Image is stored in a bufferView
+	if img.BufferView == nil || int(*img.BufferView) >= len(doc.BufferViews) {
+		return nil, fmt.Errorf("no valid BufferView")
+	}
+
+	bv := doc.BufferViews[*img.BufferView]
+
+	offset := int(bv.ByteOffset)
+	length := int(bv.ByteLength)
+
+	// For .glb, buffer is in the same file
+	return doc.Buffers[bv.Buffer].Data[offset : offset+length], nil
 }
 
 func NewWithGLTF(device *device.Device, gltfFile string) *Model {
-	vertices, indexes := modelFromGLTF(gltfFile)
+	vertices, indexes, textureData := modelFromGLTF(gltfFile)
 
-	return New(device, vertices, indexes)
+	return New(device, vertices, indexes, textureData[0])
 }
 
-func New(dev *device.Device, vertices []Vertex, indexes []uint32) *Model {
+func New(dev *device.Device, vertices []Vertex, indexes []uint32, textureData *texture.TextureConfig) *Model {
 	size := vulkan.DeviceSize(len(vertices) * int(unsafe.Sizeof(Vertex{})))
 
 	buffer, memory := dev.CreateBuffer(
@@ -209,6 +295,11 @@ func New(dev *device.Device, vertices []Vertex, indexes []uint32) *Model {
 		})
 	}
 
+	var tex *texture.Texture
+	if textureData != nil {
+		tex = texture.New(dev, textureData)
+	}
+
 	return &Model{
 		vertexCount:  uint32(len(vertices)),
 		device:       dev,
@@ -218,6 +309,7 @@ func New(dev *device.Device, vertices []Vertex, indexes []uint32) *Model {
 		numIndexes:   uint32(len(indexes)),
 		indexBuffer:  indexBuffer,
 		indexMemory:  indexMemory,
+		Texture:      tex,
 	}
 }
 
@@ -242,5 +334,8 @@ func (m *Model) Close() {
 	if m.hasIndexes {
 		vulkan.DestroyBuffer(m.device.LogicalDevice, m.indexBuffer, nil)
 		vulkan.FreeMemory(m.device.LogicalDevice, m.indexMemory, nil)
+	}
+	if m.Texture != nil {
+		m.Texture.Close()
 	}
 }

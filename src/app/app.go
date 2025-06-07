@@ -2,6 +2,7 @@ package app
 
 import (
 	"math"
+	"os"
 	"time"
 
 	"github.com/WowVeryLogin/vulkan_engine/src/object"
@@ -9,6 +10,7 @@ import (
 	"github.com/WowVeryLogin/vulkan_engine/src/runtime/descriptors"
 	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
 	"github.com/WowVeryLogin/vulkan_engine/src/runtime/renderpass"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/texture"
 
 	"github.com/WowVeryLogin/vulkan_engine/src/camcontroller"
 	"github.com/WowVeryLogin/vulkan_engine/src/camcontroller/camera"
@@ -64,14 +66,26 @@ func New() *App {
 			vulkan.BufferUsageFlags(vulkan.BufferUsageUniformBufferBit),
 			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyHostVisibleBit|vulkan.MemoryPropertyHostCoherentBit),
 		)
-		sets = append(sets, &descriptors.DescriptorSet{
-			Descriptors: []descriptors.Descriptor{
-				{
-					Type:   vulkan.DescriptorTypeUniformBuffer,
-					Flags:  vulkan.ShaderStageFlags(vulkan.ShaderStageVertexBit | vulkan.ShaderStageFragmentBit),
-					Buffer: viewUbo[i].Buffer,
-				},
+
+		descrptrs := []descriptors.Descriptor{
+			{
+				Type:   vulkan.DescriptorTypeUniformBuffer,
+				Flags:  vulkan.ShaderStageFlags(vulkan.ShaderStageVertexBit | vulkan.ShaderStageFragmentBit),
+				Buffer: viewUbo[i].Buffer,
 			},
+		}
+
+		for _, m := range models {
+			descrptrs = append(descrptrs, descriptors.Descriptor{
+				Type:         vulkan.DescriptorTypeCombinedImageSampler,
+				Flags:        vulkan.ShaderStageFlags(vulkan.ShaderStageFragmentBit),
+				ImageView:    m.Texture.ImageView,
+				ImageSampler: m.Texture.Sampler,
+			})
+		}
+
+		sets = append(sets, &descriptors.DescriptorSet{
+			Descriptors: descrptrs,
 		})
 	}
 	descriptorsMngr := descriptors.NewSets(device, sets)
@@ -245,15 +259,22 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 
 	avocado := model.NewWithGLTF(device, "assets/avocado.glb")
 
+	file, err := os.Open("assets/image.png")
+	if err != nil {
+		panic("failed to open floor file: " + err.Error())
+	}
+	defer file.Close()
+	floorTexture := texture.TextureConfigFromPNG(file)
+
 	floor := model.New(device, []model.Vertex{
-		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
-		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
-		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 0}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 1}},
+		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 0}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 1}},
 	}, []uint32{
 		0, 1, 2,
 		0, 3, 1,
-	})
+	}, floorTexture)
 
 	objects := []*object.GameObject{
 		// object.New(cube, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
@@ -262,13 +283,13 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 		// }).WithOnFrame(func(g *object.GameObject, since time.Duration) {
 		// 	g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
 		// }),
-		object.New(avocado, [3]float32{.72, .72, .72}).WithInitialTranforms([]object.Transform{
+		object.New(avocado, 0).WithInitialTranforms([]object.Transform{
 			object.NewScale(10.0, 10.0, 10.0),
 			object.NewTransition(0.0, -1.0, 2.5),
 		}).WithOnFrame(func(g *object.GameObject, since time.Duration) {
 			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{0, 1, 0})
 		}),
-		object.New(floor, [3]float32{.72, .72, .72}).WithInitialTranforms([]object.Transform{
+		object.New(floor, 1).WithInitialTranforms([]object.Transform{
 			object.NewScale(5.0, 5.0, 5.0),
 			object.NewTransition(0.0, -2.0, 2.5),
 		}),

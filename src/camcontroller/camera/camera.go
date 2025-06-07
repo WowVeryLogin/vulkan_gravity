@@ -63,7 +63,7 @@ func (c *Camera) Ubo() CameraUbo {
 		projection:    toColomnData(c.matrix),
 		view:          toColomnData(view),
 		lightPosition: [3]float32{0, -1, 1},
-		lightColor:    [4]float32{0, 1, 0, 1},
+		lightColor:    [4]float32{0.8, 0.8, 0.8, 1},
 	}
 }
 

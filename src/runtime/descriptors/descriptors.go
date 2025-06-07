@@ -19,10 +19,11 @@ type DescriptorSet struct {
 }
 
 type Descriptor struct {
-	Type   vulkan.DescriptorType
-	Flags  vulkan.ShaderStageFlags
-	Buffer vulkan.Buffer
-	Image  vulkan.Image
+	Type         vulkan.DescriptorType
+	Flags        vulkan.ShaderStageFlags
+	Buffer       vulkan.Buffer
+	ImageView    vulkan.ImageView
+	ImageSampler vulkan.Sampler
 }
 
 func NewSets(
@@ -38,9 +39,9 @@ func NewSets(
 
 	for _, set := range sets {
 		layoutBindings := []vulkan.DescriptorSetLayoutBinding{}
-		for _, descriptor := range set.Descriptors {
+		for i, descriptor := range set.Descriptors {
 			layoutBindings = append(layoutBindings, vulkan.DescriptorSetLayoutBinding{
-				Binding:         0,
+				Binding:         uint32(i),
 				DescriptorCount: 1,
 				DescriptorType:  descriptor.Type,
 				StageFlags:      descriptor.Flags,
@@ -93,23 +94,39 @@ func NewSets(
 
 	writeDescSets := []vulkan.WriteDescriptorSet{}
 	for _, set := range sets {
-		bufInfo := []vulkan.DescriptorBufferInfo{}
-		for _, descriptor := range set.Descriptors {
-			bufInfo = append(bufInfo, vulkan.DescriptorBufferInfo{
-				Buffer: descriptor.Buffer,
-				Offset: 0,
-				Range:  vulkan.DeviceSize(vulkan.WholeSize),
-			})
+		for i, descriptor := range set.Descriptors {
+			switch descriptor.Type {
+			case vulkan.DescriptorTypeUniformBuffer:
+				writeDescSets = append(writeDescSets, vulkan.WriteDescriptorSet{
+					SType:           vulkan.StructureTypeWriteDescriptorSet,
+					DstSet:          set.Set,
+					DstBinding:      uint32(i),
+					DstArrayElement: 0,
+					DescriptorType:  descriptor.Type,
+					DescriptorCount: 1,
+					PBufferInfo: []vulkan.DescriptorBufferInfo{{
+						Buffer: descriptor.Buffer,
+						Offset: 0,
+						Range:  vulkan.DeviceSize(vulkan.WholeSize),
+					}},
+				})
+			case vulkan.DescriptorTypeCombinedImageSampler:
+				writeDescSets = append(writeDescSets, vulkan.WriteDescriptorSet{
+					SType:           vulkan.StructureTypeWriteDescriptorSet,
+					DstSet:          set.Set,
+					DstBinding:      uint32(i),
+					DstArrayElement: 0,
+					DescriptorType:  descriptor.Type,
+					DescriptorCount: 1,
+					PImageInfo: []vulkan.DescriptorImageInfo{{
+						Sampler:     descriptor.ImageSampler,
+						ImageView:   descriptor.ImageView,
+						ImageLayout: vulkan.ImageLayoutShaderReadOnlyOptimal,
+					}},
+				})
+			}
 		}
-		writeDescSets = append(writeDescSets, vulkan.WriteDescriptorSet{
-			SType:           vulkan.StructureTypeWriteDescriptorSet,
-			DstSet:          set.Set,
-			DstBinding:      0,
-			DstArrayElement: 0,
-			DescriptorType:  vulkan.DescriptorTypeUniformBuffer,
-			DescriptorCount: uint32(len(bufInfo)),
-			PBufferInfo:     bufInfo,
-		})
+
 	}
 	vulkan.UpdateDescriptorSets(device.LogicalDevice, uint32(len(writeDescSets)), writeDescSets, 0, nil)
 

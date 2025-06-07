@@ -12,6 +12,7 @@ import (
 type GameObject struct {
 	ID              int
 	Model           *model.Model
+	TextureType     int
 	color           [3]float32
 	transformations mat.Dense
 	offset          mat.VecDense
@@ -32,14 +33,14 @@ type Transform interface {
 
 var everIncreasingID int
 
-func New(model *model.Model, color [3]float32) *GameObject {
+func New(model *model.Model, textureType int) *GameObject {
 	everIncreasingID += 1
 
 	return &GameObject{
-		ID:     everIncreasingID,
-		Model:  model,
-		color:  color,
-		offset: *mat.NewVecDense(3, []float64{0, 0, 0}),
+		ID:          everIncreasingID,
+		Model:       model,
+		TextureType: textureType,
+		offset:      *mat.NewVecDense(3, []float64{0, 0, 0}),
 		transformations: *mat.NewDense(3, 3, []float64{
 			1, 0, 0,
 			0, 1, 0,
@@ -116,7 +117,7 @@ func (r Rotate) Transform(g *GameObject) *GameObject {
 		transformations: result,
 		offset:          g.offset,
 		onFrame:         g.onFrame,
-		color:           g.color,
+		TextureType:     g.TextureType,
 		Mass:            g.Mass,
 		Field:           g.Field,
 	}
@@ -149,7 +150,7 @@ func (s Scale) Transform(g *GameObject) *GameObject {
 		transformations: result,
 		offset:          g.offset,
 		onFrame:         g.onFrame,
-		color:           g.color,
+		TextureType:     g.TextureType,
 		Mass:            g.Mass,
 		Field:           g.Field,
 	}
@@ -180,7 +181,7 @@ func (t Transition) Transform(g *GameObject) *GameObject {
 		transformations: g.transformations,
 		offset:          result,
 		onFrame:         g.onFrame,
-		color:           g.color,
+		TextureType:     g.TextureType,
 		Mass:            g.Mass,
 		Field:           g.Field,
 	}
@@ -202,6 +203,6 @@ func (g *GameObject) ToPushData(since time.Duration) *pipeline.PushData {
 
 	return &pipeline.PushData{
 		Transformation: transformation,
-		Color:          g.color,
+		TextureType:    int32(g.TextureType),
 	}
 }
