@@ -1,9 +1,9 @@
 package buffer
 
 import (
-	"game/device"
 	"unsafe"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
 	"github.com/goki/vulkan"
 )
 

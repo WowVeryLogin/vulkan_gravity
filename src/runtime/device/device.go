@@ -3,9 +3,9 @@ package device
 import (
 	"errors"
 	"fmt"
-	"game/window"
 	"unsafe"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/window"
 	"github.com/goki/vulkan"
 )
 

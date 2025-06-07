@@ -1,19 +1,22 @@
 package app
 
 import (
-	"game/buffer"
-	"game/camcontroller"
-	"game/camera"
-	"game/descriptors"
-	"game/device"
-	"game/drawer"
-	"game/model"
-	"game/object"
-	"game/renderer"
-	"game/swapchain"
-	"game/window"
 	"math"
 	"time"
+
+	"github.com/WowVeryLogin/vulkan_engine/src/object"
+	"github.com/WowVeryLogin/vulkan_engine/src/object/model"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/descriptors"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/renderpass"
+
+	"github.com/WowVeryLogin/vulkan_engine/src/camcontroller"
+	"github.com/WowVeryLogin/vulkan_engine/src/camcontroller/camera"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/buffer"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/swapchain"
+	"github.com/WowVeryLogin/vulkan_engine/src/systems/renderer"
+	pointlights "github.com/WowVeryLogin/vulkan_engine/src/systems/renderer/point_lights"
+	"github.com/WowVeryLogin/vulkan_engine/src/window"
 
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"github.com/goki/vulkan"
@@ -25,18 +28,18 @@ type App struct {
 
 	models []*model.Model
 
-	gameObjectsDrawer *drawer.Drawer
+	gameObjectsRenderer *renderer.Renderer
+	pointLightsRenderer *pointlights.PointLightsRenderer
 
-	renderer    *renderer.Renderer
+	renderPass  *renderpass.RenderPass
 	gameObjects []*object.GameObject
 	camera      *camera.Camera
 
 	cameraController *camcontroller.Controller
 
-	worldDescriptorSet  *descriptors.DescriptorsSet
-	perFrameDescriptors []*descriptors.DescriptorsSet
-	viewUbo             []*buffer.Buffer[camera.CameraUbo]
-	worldUbo            *buffer.Buffer[camera.WorldUbo]
+	descriptorManager   descriptors.SetsManager
+	perFrameDescriptors []*descriptors.DescriptorSet
+	cameraUbos          []*buffer.Buffer[camera.CameraUbo]
 }
 
 func New() *App {
@@ -50,53 +53,53 @@ func New() *App {
 	device := device.New(window)
 	models, objects := loadGameObjects(device)
 
-	renderer := renderer.New(device, window.Extent)
-	cam := camera.New(50.0, renderer.GetAspectRatio(), 0.1, 10.0)
-
-	worldUbo := buffer.New[camera.WorldUbo](
-		device,
-		1,
-		false,
-		vulkan.BufferUsageFlags(vulkan.BufferUsageUniformBufferBit|vulkan.BufferUsageTransferDstBit),
-		vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyDeviceLocalBit),
-	)
-	worldUbo.InitWithStaging([]camera.WorldUbo{
-		cam.GetWorldUbo(),
-	})
-	worldDescriptorSet := descriptors.NewDescriptors(device)
-	worldDescriptorSet.UpdateDescriptorSet(worldUbo.Buffer)
+	renderpass := renderpass.New(device, window.Extent)
+	cam := camera.New(50.0, renderpass.GetAspectRatio(), 0.1, 10.0)
 
 	viewUbo := make([]*buffer.Buffer[camera.CameraUbo], swapchain.MAX_FRAMES_IN_FLIGHT)
-	perFrameDescriptors := make([]*descriptors.DescriptorsSet, swapchain.MAX_FRAMES_IN_FLIGHT)
+	sets := []*descriptors.DescriptorSet{}
 	for i := range swapchain.MAX_FRAMES_IN_FLIGHT {
 		viewUbo[i] = buffer.New[camera.CameraUbo](
 			device, 1, true,
 			vulkan.BufferUsageFlags(vulkan.BufferUsageUniformBufferBit),
 			vulkan.MemoryPropertyFlags(vulkan.MemoryPropertyHostVisibleBit|vulkan.MemoryPropertyHostCoherentBit),
 		)
-		perFrameDescriptors[i] = descriptors.NewDescriptors(device)
-		perFrameDescriptors[i].UpdateDescriptorSet(viewUbo[i].Buffer)
+		sets = append(sets, &descriptors.DescriptorSet{
+			Descriptors: []descriptors.Descriptor{
+				{
+					Type:   vulkan.DescriptorTypeUniformBuffer,
+					Flags:  vulkan.ShaderStageFlags(vulkan.ShaderStageVertexBit | vulkan.ShaderStageFragmentBit),
+					Buffer: viewUbo[i].Buffer,
+				},
+			},
+		})
 	}
+	descriptorsMngr := descriptors.NewSets(device, sets)
 
-	drawer := drawer.New(device, renderer.RenderPass, []vulkan.DescriptorSetLayout{
-		worldDescriptorSet.Layout,
-		perFrameDescriptors[0].Layout,
-	})
+	layouts := []vulkan.DescriptorSetLayout{}
+	for _, set := range sets {
+		layouts = append(layouts, set.Layout)
+	}
+	objectRenderer := renderer.New(device, renderpass.RenderPass, layouts)
+
+	pointLightRenderer := pointlights.New(device, renderpass.RenderPass, layouts)
 
 	return &App{
-		window:            window,
-		device:            device,
-		gameObjectsDrawer: drawer,
-		renderer:          renderer,
-		camera:            cam,
-		cameraController:  camcontroller.New(window),
-		models:            models,
-		gameObjects:       objects,
+		window: window,
+		device: device,
 
-		worldDescriptorSet:  worldDescriptorSet,
-		perFrameDescriptors: perFrameDescriptors,
-		viewUbo:             viewUbo,
-		worldUbo:            worldUbo,
+		pointLightsRenderer: pointLightRenderer,
+		gameObjectsRenderer: objectRenderer,
+
+		renderPass:       renderpass,
+		camera:           cam,
+		cameraController: camcontroller.New(window),
+		models:           models,
+		gameObjects:      objects,
+
+		perFrameDescriptors: sets,
+		cameraUbos:          viewUbo,
+		descriptorManager:   descriptorsMngr,
 	}
 }
 
@@ -106,21 +109,26 @@ func (a *App) Run() {
 
 		a.cameraController.Update(a.window, a.camera)
 
-		commandBuffer, err := a.renderer.BeginFrame()
+		commandBuffer, err := a.renderPass.BeginFrame()
 		if err == nil {
-			frameIdx := a.renderer.FrameIdx
-			a.viewUbo[frameIdx].WriteBuffer([]camera.CameraUbo{
-				a.camera.GetUbo(),
+			frameIdx := a.renderPass.FrameIdx
+			a.cameraUbos[frameIdx].WriteBuffer([]camera.CameraUbo{
+				a.camera.Ubo(),
 			})
-			a.renderer.BeginSwapChainRenderPass()
-			a.gameObjectsDrawer.RenderGameObects(
+			a.renderPass.BeginSwapChainRenderPass()
+
+			a.gameObjectsRenderer.Render(
 				commandBuffer.GraphicsCommandBuffer,
 				a.gameObjects,
-				a.worldDescriptorSet,
 				a.perFrameDescriptors[frameIdx],
 			)
-			a.renderer.EndSwapChainRenderPass()
-			err = a.renderer.EndFrame()
+			a.pointLightsRenderer.Render(
+				commandBuffer.GraphicsCommandBuffer,
+				a.perFrameDescriptors[frameIdx],
+			)
+
+			a.renderPass.EndSwapChainRenderPass()
+			err = a.renderPass.EndFrame()
 		}
 
 		if err == swapchain.ErrOutOfDate || a.window.SizeChanged {
@@ -129,8 +137,8 @@ func (a *App) Run() {
 			}
 			vulkan.DeviceWaitIdle(a.device.LogicalDevice)
 			a.window.SizeChanged = false
-			a.renderer.UpdateSwapchain(a.window.Extent)
-			a.camera.Update(a.renderer.GetAspectRatio())
+			a.renderPass.UpdateSwapchain(a.window.Extent)
+			a.camera.Update(a.renderPass.GetAspectRatio())
 		}
 	}
 
@@ -140,20 +148,20 @@ func (a *App) Run() {
 }
 
 func (a *App) Close() {
-	a.worldDescriptorSet.Close()
-	a.worldUbo.Close()
 	for _, desc := range a.perFrameDescriptors {
 		desc.Close()
 	}
-	for _, ubo := range a.viewUbo {
+	for _, ubo := range a.cameraUbos {
 		ubo.Close()
 	}
+	a.descriptorManager.Close()
 
 	for _, model := range a.models {
 		model.Close()
 	}
-	a.gameObjectsDrawer.Close()
-	a.renderer.Close()
+	a.gameObjectsRenderer.Close()
+	a.renderPass.Close()
+	a.pointLightsRenderer.Close()
 	a.device.Close()
 	a.window.Close()
 }

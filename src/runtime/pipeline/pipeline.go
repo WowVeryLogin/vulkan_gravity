@@ -1,20 +1,9 @@
 package pipeline
 
 import (
-	"game/device"
-	"game/model"
-	"game/shader"
-	"unsafe"
-
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
 	"github.com/goki/vulkan"
 )
-
-type Pipeline struct {
-	device        *device.Device
-	shaderModules []vulkan.ShaderModule
-	pipeline      vulkan.Pipeline
-	Layout        vulkan.PipelineLayout
-}
 
 type PushData struct {
 	Transformation [16]float32
@@ -22,56 +11,63 @@ type PushData struct {
 	_              float32
 }
 
-func New(
+func NewLayout(
 	device *device.Device,
-	renderPass vulkan.RenderPass,
 	descriptorsLayout []vulkan.DescriptorSetLayout,
-) *Pipeline {
-	vertModule := shader.CreateShaderModule("shaders/vert.spv", device.LogicalDevice)
-	fragModule := shader.CreateShaderModule("shaders/frag.spv", device.LogicalDevice)
-
+	constRanges []vulkan.PushConstantRange,
+) vulkan.PipelineLayout {
 	var layout vulkan.PipelineLayout
 	if err := vulkan.Error(vulkan.CreatePipelineLayout(device.LogicalDevice, &vulkan.PipelineLayoutCreateInfo{
 		SType:                  vulkan.StructureTypePipelineLayoutCreateInfo,
-		PushConstantRangeCount: 1,
-		PPushConstantRanges: []vulkan.PushConstantRange{
-			{
-				StageFlags: vulkan.ShaderStageFlags(vulkan.ShaderStageVertexBit | vulkan.ShaderStageFragmentBit),
-				Offset:     0,
-				Size:       uint32(unsafe.Sizeof(PushData{})),
-			},
-		},
-		SetLayoutCount: uint32(len(descriptorsLayout)),
-		PSetLayouts:    descriptorsLayout,
+		PushConstantRangeCount: uint32(len(constRanges)),
+		PPushConstantRanges:    constRanges,
+		SetLayoutCount:         uint32(len(descriptorsLayout)),
+		PSetLayouts:            descriptorsLayout,
 	}, nil, &layout)); err != nil {
 		panic("failed to create pipeline layout: " + err.Error())
 	}
 
-	pipeline := make([]vulkan.Pipeline, 1)
-	if err := vulkan.Error(vulkan.CreateGraphicsPipelines(device.LogicalDevice, vulkan.NullPipelineCache, 1, []vulkan.GraphicsPipelineCreateInfo{
-		{
+	return layout
+}
+
+type PipelineConfig struct {
+	Layout     vulkan.PipelineLayout
+	RenderPass vulkan.RenderPass
+	VertShader vulkan.ShaderModule
+	FragShader vulkan.ShaderModule
+}
+
+func New(
+	device *device.Device,
+	configs []PipelineConfig,
+	vertexBindingDesc []vulkan.VertexInputBindingDescription,
+	vertexBindingAttr []vulkan.VertexInputAttributeDescription,
+) []vulkan.Pipeline {
+	infos := []vulkan.GraphicsPipelineCreateInfo{}
+	for _, config := range configs {
+		infos = append(infos, vulkan.GraphicsPipelineCreateInfo{
 			SType:      vulkan.StructureTypeGraphicsPipelineCreateInfo,
 			StageCount: 2,
 			PStages: []vulkan.PipelineShaderStageCreateInfo{
 				{
 					SType:  vulkan.StructureTypePipelineShaderStageCreateInfo,
 					Stage:  vulkan.ShaderStageVertexBit,
-					Module: vertModule,
+					Module: config.VertShader,
 					PName:  "main\x00",
 				},
 				{
 					SType:  vulkan.StructureTypePipelineShaderStageCreateInfo,
 					Stage:  vulkan.ShaderStageFragmentBit,
-					Module: fragModule,
+					Module: config.FragShader,
 					PName:  "main\x00",
 				},
 			},
 			PVertexInputState: &vulkan.PipelineVertexInputStateCreateInfo{
 				SType:                           vulkan.StructureTypePipelineVertexInputStateCreateInfo,
-				VertexAttributeDescriptionCount: uint32(len(model.VertexAttributeDescription)),
-				VertexBindingDescriptionCount:   uint32(len(model.VertexBindingDescription)),
-				PVertexBindingDescriptions:      model.VertexBindingDescription,
-				PVertexAttributeDescriptions:    model.VertexAttributeDescription,
+				VertexBindingDescriptionCount:   uint32(len(vertexBindingDesc)),
+				PVertexBindingDescriptions:      vertexBindingDesc,
+				VertexAttributeDescriptionCount: uint32(len(vertexBindingAttr)),
+				PVertexAttributeDescriptions:    vertexBindingAttr,
 			},
 			PInputAssemblyState: &vulkan.PipelineInputAssemblyStateCreateInfo{
 				SType:                  vulkan.StructureTypePipelineInputAssemblyStateCreateInfo,
@@ -127,32 +123,19 @@ func New(
 					vulkan.DynamicStateScissor,
 				},
 			},
-			Layout:             layout,
-			RenderPass:         renderPass,
+			Layout:             config.Layout,
+			RenderPass:         config.RenderPass,
 			Subpass:            0,
 			BasePipelineIndex:  -1,
 			BasePipelineHandle: vulkan.NullPipeline,
-		},
-	}, nil, pipeline)); err != nil {
+		})
+	}
+
+	pipelines := make([]vulkan.Pipeline, len(configs))
+	if err := vulkan.Error(vulkan.CreateGraphicsPipelines(device.LogicalDevice, vulkan.NullPipelineCache, uint32(len(configs)),
+		infos, nil, pipelines)); err != nil {
 		panic("failed to create pipeline: " + err.Error())
 	}
 
-	return &Pipeline{
-		device:        device,
-		pipeline:      pipeline[0],
-		Layout:        layout,
-		shaderModules: []vulkan.ShaderModule{vertModule, fragModule},
-	}
-}
-
-func (p *Pipeline) Bind(commandBuffer vulkan.CommandBuffer) {
-	vulkan.CmdBindPipeline(commandBuffer, vulkan.PipelineBindPointGraphics, p.pipeline)
-}
-
-func (p *Pipeline) Close() {
-	for _, module := range p.shaderModules {
-		vulkan.DestroyShaderModule(p.device.LogicalDevice, module, nil)
-	}
-	vulkan.DestroyPipelineLayout(p.device.LogicalDevice, p.Layout, nil)
-	vulkan.DestroyPipeline(p.device.LogicalDevice, p.pipeline, nil)
+	return pipelines
 }

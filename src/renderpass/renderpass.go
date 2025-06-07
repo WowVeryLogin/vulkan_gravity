@@ -1,9 +1,8 @@
-package renderer
+package renderpass
 
 import (
-	"game/device"
-	"game/swapchain"
-
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/swapchain"
 	"github.com/goki/vulkan"
 )
 
@@ -87,11 +86,6 @@ func (r *Renderer) BeginFrame() (*MultistageCommandBuffer, error) {
 	})); err != nil {
 		panic("failed to begin recording command buffer:" + err.Error())
 	}
-	// if err := vulkan.Error(vulkan.BeginCommandBuffer(cb.ComputeCommandBuffer, &vulkan.CommandBufferBeginInfo{
-	// 	SType: vulkan.StructureTypeCommandBufferBeginInfo,
-	// })); err != nil {
-	// 	panic("failed to begin recording command buffer:" + err.Error())
-	// }
 
 	return &cb, nil
 }

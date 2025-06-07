@@ -1,4 +1,4 @@
-module game
+module github.com/WowVeryLogin/vulkan_engine
 
 go 1.24.2
 

@@ -1,10 +1,10 @@
 package camcontroller
 
 import (
-	"game/camera"
-	"game/window"
 	"time"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/camcontroller/camera"
+	"github.com/WowVeryLogin/vulkan_engine/src/window"
 	"github.com/go-gl/glfw/v3.3/glfw"
 	"gonum.org/v1/gonum/mat"
 )

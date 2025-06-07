@@ -3,8 +3,8 @@ package swapchain
 import (
 	"errors"
 	"fmt"
-	"game/device"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
 	"github.com/goki/vulkan"
 )
 

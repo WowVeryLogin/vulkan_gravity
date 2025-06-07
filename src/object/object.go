@@ -1,11 +1,11 @@
 package object
 
 import (
-	"game/model"
-	"game/pipeline"
 	"math"
 	"time"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/object/model"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/pipeline"
 	"gonum.org/v1/gonum/mat"
 )
 

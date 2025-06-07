@@ -2,11 +2,11 @@ package model
 
 import (
 	"encoding/binary"
-	"game/device"
 	"log"
 	"math"
 	"unsafe"
 
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
 	"github.com/goki/vulkan"
 	"github.com/qmuntal/gltf"
 )

@@ -1,12 +1,13 @@
 package gravity
 
 import (
-	"game/device"
-	"game/object"
-	"game/shader"
-	"game/swapchain"
 	"time"
 	"unsafe"
+
+	"github.com/WowVeryLogin/vulkan_engine/src/object"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/device"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/shader"
+	"github.com/WowVeryLogin/vulkan_engine/src/runtime/swapchain"
 
 	"github.com/goki/vulkan"
 )

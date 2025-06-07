@@ -1,8 +1,9 @@
 package main
 
 import (
-	"game/app"
 	"runtime"
+
+	"github.com/WowVeryLogin/vulkan_engine/src/app"
 )
 
 func init() {
