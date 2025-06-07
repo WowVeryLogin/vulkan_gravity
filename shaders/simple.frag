@@ -1,8 +1,9 @@
 #version 450
 
-layout(location = 0) in vec3 worldPosition;
-layout(location = 1) in vec3 fragNormalWorld;
-layout(location = 2) in vec2 texCoord;
+layout(location = 0) in vec3 defaultColor;
+layout(location = 1) in vec3 worldPosition;
+layout(location = 2) in vec3 fragNormalWorld;
+layout(location = 3) in vec2 texCoord;
 
 layout (location = 0) out vec4 outColour;
 
@@ -34,13 +35,13 @@ void main() {
 	float gobalLightIntensity = AMBIENT_LIGHT_INTENSITY + 0.5 * max(dot(normalize(fragNormalWorld), LIGHT_DIRECTION), 0.0);
 
 
-	vec4 colour;
+	vec3 colour;
 	if (push.textureType == 0) {
-		colour = texture(avocadoSampler, texCoord);
+		colour = texture(avocadoSampler, texCoord).xyz;
 	} else if (push.textureType == 1) {
-		colour = texture(boxSampler, texCoord);
+		colour = texture(boxSampler, texCoord).xyz;
 	} else {
-		colour = vec4(.72, .72, .72, 1.0);
+		colour = defaultColor;
 	}
-	outColour = vec4((gobalLightIntensity + pointLightIntensity) * colour.xyz, 1.0);
+	outColour = vec4((gobalLightIntensity + pointLightIntensity) * colour, 1.0);
 }

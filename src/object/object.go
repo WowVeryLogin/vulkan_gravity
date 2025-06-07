@@ -13,7 +13,6 @@ type GameObject struct {
 	ID              int
 	Model           *model.Model
 	TextureType     int
-	color           [3]float32
 	transformations mat.Dense
 	offset          mat.VecDense
 	onFrame         func(g *GameObject, since time.Duration)

@@ -268,12 +268,14 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 
 	floor := model.New(device, []model.Vertex{
 		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 0}},
-		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 1}},
 		{Pos: model.Position{-.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 0}},
-		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 1}},
+		{Pos: model.Position{-.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 0}},
+		{Pos: model.Position{.5, .5, -.5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{0, 1}},
+		{Pos: model.Position{.5, .5, .5}, RGB: [3]float32{.72, .72, .72}, Normal: [3]float32{0, -1, 0}, UV: [2]float32{1, 1}},
 	}, []uint32{
 		0, 1, 2,
-		0, 3, 1,
+		3, 4, 5,
 	}, floorTexture)
 
 	objects := []*object.GameObject{
