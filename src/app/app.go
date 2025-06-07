@@ -262,13 +262,13 @@ func loadGameObjects(device *device.Device) ([]*model.Model, []*object.GameObjec
 		// }).WithOnFrame(func(g *object.GameObject, since time.Duration) {
 		// 	g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{1, 1, 1})
 		// }),
-		object.New(avocado, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+		object.New(avocado, [3]float32{.72, .72, .72}).WithInitialTranforms([]object.Transform{
 			object.NewScale(10.0, 10.0, 10.0),
 			object.NewTransition(0.0, -1.0, 2.5),
 		}).WithOnFrame(func(g *object.GameObject, since time.Duration) {
 			g.Rotate(0.5*float64(since.Milliseconds())/15.0, [3]float64{0, 1, 0})
 		}),
-		object.New(floor, [3]float32{0.0, 0.0, 0.0}).WithInitialTranforms([]object.Transform{
+		object.New(floor, [3]float32{.72, .72, .72}).WithInitialTranforms([]object.Transform{
 			object.NewScale(5.0, 5.0, 5.0),
 			object.NewTransition(0.0, -2.0, 2.5),
 		}),

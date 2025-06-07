@@ -443,7 +443,7 @@ func (s *Swapchain) SubmitCommandBuffer(
 			},
 			PWaitDstStageMask: []vulkan.PipelineStageFlags{
 				vulkan.PipelineStageFlags(vulkan.PipelineStageColorAttachmentOutputBit),
-				vulkan.PipelineStageFlags(vulkan.PipelineStageComputeShaderBit),
+				// vulkan.PipelineStageFlags(vulkan.PipelineStageComputeShaderBit),
 			},
 			CommandBufferCount:   1,
 			PCommandBuffers:      []vulkan.CommandBuffer{buffers},

@@ -29,7 +29,9 @@ func New[T any](
 
 	var data unsafe.Pointer
 	if mapped {
-		vulkan.MapMemory(dev.LogicalDevice, memory, 0, size, 0, &data)
+		if err := vulkan.Error(vulkan.MapMemory(dev.LogicalDevice, memory, 0, size, 0, &data)); err != nil {
+			panic("failed to map memory: " + err.Error())
+		}
 	}
 
 	return &Buffer[T]{

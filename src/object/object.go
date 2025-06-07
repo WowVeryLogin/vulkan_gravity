@@ -123,7 +123,7 @@ func (r Rotate) Transform(g *GameObject) *GameObject {
 }
 
 func (g *GameObject) Scale(x float64, y float64, z float64) {
-	g = NewScale(x, y, z).Transform(g)
+	*g = *NewScale(x, y, z).Transform(g)
 }
 
 type Scale struct {

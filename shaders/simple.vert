@@ -27,5 +27,5 @@ void main() {
 	worldPosition = positionWorld.xyz;
 
 	gl_Position = cameraUbo.projection * cameraUbo.view * positionWorld;
-	fragColor = color;
+	fragColor = push.color;
 }

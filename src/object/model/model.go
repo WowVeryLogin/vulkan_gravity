@@ -33,7 +33,7 @@ type Vertex struct {
 	Pos    Position
 	RGB    [3]float32
 	Normal [3]float32
-	UV     [3]float32
+	UV     [2]float32
 }
 
 var VertexBindingDescription = []vulkan.VertexInputBindingDescription{
@@ -110,7 +110,7 @@ func modelFromGLTF(gltfFile string) ([]Vertex, []uint32) {
 					},
 					RGB:    [3]float32{1, 1, 1}, // Default color
 					Normal: [3]float32{0, 0, 0}, // Default normal
-					UV:     [3]float32{0, 0, 0}, // Default UV
+					UV:     [2]float32{0, 0},    // Default UV
 				})
 			}
 

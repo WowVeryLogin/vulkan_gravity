@@ -67,6 +67,6 @@ func (d *PointLightsRenderer) Render(
 func (d *PointLightsRenderer) Close() {
 	vulkan.DestroyShaderModule(d.device.LogicalDevice, d.vertShader, nil)
 	vulkan.DestroyShaderModule(d.device.LogicalDevice, d.fragShader, nil)
-	vulkan.DestroyPipelineLayout(d.device.LogicalDevice, d.layout, nil)
 	vulkan.DestroyPipeline(d.device.LogicalDevice, d.pipeline, nil)
+	vulkan.DestroyPipelineLayout(d.device.LogicalDevice, d.layout, nil)
 }
